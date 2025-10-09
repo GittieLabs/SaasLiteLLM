@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     # LiteLLM
     litellm_master_key: str
     litellm_config_path: str = "src/config/litellm_config.yaml"
+    litellm_proxy_url: str = "http://localhost:8002"  # Default for local dev
 
     # API Keys
     openai_api_key: Optional[str] = None

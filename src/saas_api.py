@@ -93,7 +93,7 @@ async def call_litellm(
     """
     # Get team's virtual API key from LiteLLM
     # For now, using master key - in production, you'd use team-specific keys
-    litellm_url = f"http://localhost:{settings.port}/chat/completions"
+    litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
 
     headers = {
         "Authorization": f"Bearer {settings.litellm_master_key}",
