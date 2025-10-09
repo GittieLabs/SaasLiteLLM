@@ -46,8 +46,10 @@ scripts/
 Thumbs.db
 
 # Documentation
-README.md
+# README.md  # Don't exclude - needed for pyproject.toml package metadata
 docs/
+*.md
+!README.md
 
 # Database
 *.db
