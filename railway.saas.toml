@@ -1,0 +1,11 @@
+# Railway Config for SaaS API Service
+# Use this for the second service by setting:
+# Service Settings > Config File Path = railway.saas.toml
+
+[build]
+builder = "dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"

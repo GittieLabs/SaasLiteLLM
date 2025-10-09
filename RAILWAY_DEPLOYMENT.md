@@ -2,6 +2,8 @@
 
 This guide covers deploying your LiteLLM SaaS platform to Railway with separate services.
 
+**📖 Using Config-as-Code?** See [RAILWAY_CONFIG_GUIDE.md](RAILWAY_CONFIG_GUIDE.md) for automated deployment setup with `railway.toml`!
+
 ## Architecture Overview
 
 Your Railway project will have **4 services**:
