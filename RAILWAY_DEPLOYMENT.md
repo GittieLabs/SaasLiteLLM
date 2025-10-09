@@ -56,20 +56,20 @@ Your Railway project will have **4 services**:
 
 1. Click "+ New" → "GitHub Repo"
 2. Connect your `SaasLiteLLM` repository
-3. Railway will detect `Dockerfile.litellm`
-4. Configure the service:
-   - **Name**: `litellm-proxy`
-   - **Dockerfile Path**: `Dockerfile.litellm`
-   - **Port**: `4000`
+3. Railway will auto-detect `Dockerfile` (no configuration needed!)
+4. Name the service: `litellm-proxy`
+5. Railway will automatically build and deploy using port `4000`
 
 ### Step 5: Deploy FastAPI SaaS API Service
 
 1. Click "+ New" → "GitHub Repo" (same repository)
 2. Add as second service from same repo
-3. Configure the service:
-   - **Name**: `saas-api`
-   - **Dockerfile Path**: `Dockerfile.saas`
-   - **Port**: `8000`
+3. Name the service: `saas-api`
+4. **IMPORTANT**: In Variables tab, add:
+   ```
+   RAILWAY_DOCKERFILE_PATH=Dockerfile.saas
+   ```
+5. Railway will build using `Dockerfile.saas` and deploy on port `8000`
 
 ---
 
@@ -78,6 +78,8 @@ Your Railway project will have **4 services**:
 ### 🔧 LiteLLM Proxy Service
 
 Set these in Railway dashboard for the **LiteLLM Proxy** service:
+
+**Note**: No need to set `RAILWAY_DOCKERFILE_PATH` - Railway auto-detects the root `Dockerfile`!
 
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
@@ -110,8 +112,11 @@ REDIS_URL=${{Redis.REDIS_URL}}
 
 Set these in Railway dashboard for the **SaaS API** service:
 
+**CRITICAL**: Must include `RAILWAY_DOCKERFILE_PATH` to use the correct Dockerfile!
+
 | Variable | Required | Description | Example |
 |----------|----------|-------------|---------|
+| `RAILWAY_DOCKERFILE_PATH` | ✅ | **CRITICAL**: Tells Railway which Dockerfile to use | `Dockerfile.saas` |
 | `DATABASE_URL` | ✅ | PostgreSQL connection string (same as LiteLLM) | `postgresql://user:pass@host:5432/db` |
 | `LITELLM_MASTER_KEY` | ✅ | Must match LiteLLM proxy's key | `sk-prod-1234567890abcdef` |
 | `LITELLM_PROXY_URL` | ✅ | Internal URL to LiteLLM service | `http://litellm-proxy.railway.internal:4000` |
@@ -152,6 +157,7 @@ REDIS_URL=${{Redis.REDIS_URL}}
 
 ```bash
 # Copy these to Railway's SaaS API service environment variables
+RAILWAY_DOCKERFILE_PATH=Dockerfile.saas
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 LITELLM_MASTER_KEY=${{litellm-proxy.LITELLM_MASTER_KEY}}
 LITELLM_PROXY_URL=http://litellm-proxy.railway.internal:4000

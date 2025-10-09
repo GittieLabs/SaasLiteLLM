@@ -1,36 +1,20 @@
-# Use Python 3.11 slim image
-FROM python:3.11-slim
+# Dockerfile for LiteLLM Proxy Service
+# Use the official LiteLLM Docker image
+FROM ghcr.io/berriai/litellm:main-latest
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc \
-    postgresql-client \
-    && rm -rf /var/lib/apt/lists/*
+# Copy configuration file
+COPY src/config/litellm_config.yaml /app/config.yaml
 
-# Copy project files
-COPY pyproject.toml ./
-COPY src/ ./src/
-COPY README.md ./
-
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir .
-
-# Create non-root user for security
-RUN useradd -m -u 1000 litellm && \
-    chown -R litellm:litellm /app
-
-USER litellm
-
-# Expose port
-EXPOSE 8000
+# Expose port (Railway will use PORT env var)
+EXPOSE 4000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"
+    CMD curl -f http://localhost:4000/health || exit 1
 
-# Start the application
-CMD ["python", "src/main.py"]
+# Start LiteLLM proxy
+# Railway provides PORT env var, but LiteLLM uses 4000 by default
+CMD ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]
