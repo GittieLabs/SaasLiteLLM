@@ -1,0 +1,97 @@
+model_list:
+  # OpenAI Models
+  - model_name: gpt-4-turbo
+    litellm_params:
+      model: gpt-4-turbo-preview
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      mode: chat
+      
+  - model_name: gpt-3.5-turbo
+    litellm_params:
+      model: gpt-3.5-turbo
+      api_key: os.environ/OPENAI_API_KEY
+    model_info:
+      mode: chat
+
+  # Anthropic Models
+  - model_name: claude-3-opus
+    litellm_params:
+      model: anthropic/claude-3-opus-20240229
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      mode: chat
+
+  - model_name: claude-3-sonnet
+    litellm_params:
+      model: anthropic/claude-3-sonnet-20240229
+      api_key: os.environ/ANTHROPIC_API_KEY
+    model_info:
+      mode: chat
+
+# General settings
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY
+  database_url: os.environ/DATABASE_URL
+
+  # Redis caching for faster responses and cost savings
+  cache: true
+  cache_params:
+    type: "redis"
+    host: os.environ/REDIS_HOST
+    port: os.environ/REDIS_PORT
+    password: os.environ/REDIS_PASSWORD
+    ttl: 600  # Cache responses for 10 minutes
+
+  # Cost tracking per team
+  track_cost_per_deployment: true
+
+# Router settings
+router_settings:
+  redis_host: os.environ/REDIS_HOST
+  redis_port: os.environ/REDIS_PORT
+  redis_password: os.environ/REDIS_PASSWORD
+  enable_pre_call_checks: true
+
+  # Rate limiting using Redis
+  routing_strategy: "usage-based-routing"  # Smart routing based on usage
+  num_retries: 3
+  timeout: 600
+
+  # Redis-based rate limiting per team
+  redis_enabled: true
+  
+# Teams configuration with rate limiting and budgets
+teams:
+  - team_id: team_1
+    team_alias: "development-team"
+    members_with_roles:
+      - role: "admin"
+        user_id: "dev-admin"
+    metadata:
+      department: "engineering"
+      budget_limit: 1000
+    models:
+      - "gpt-3.5-turbo"
+      - "claude-3-sonnet"
+    max_budget: 1000.0  # Monthly budget in USD
+    budget_duration: "30d"  # Reset every 30 days
+    tpm_limit: 10000  # Tokens per minute limit
+    rpm_limit: 100  # Requests per minute limit
+
+  - team_id: team_2
+    team_alias: "production-team"
+    members_with_roles:
+      - role: "admin"
+        user_id: "prod-admin"
+    metadata:
+      department: "production"
+      budget_limit: 5000
+    models:
+      - "gpt-4-turbo"
+      - "claude-3-opus"
+      - "claude-3-sonnet"
+    max_budget: 5000.0  # Monthly budget in USD
+    budget_duration: "30d"
+    tpm_limit: 50000  # Higher limits for production
+    rpm_limit: 500

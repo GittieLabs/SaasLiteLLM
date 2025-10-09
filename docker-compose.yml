@@ -1,0 +1,85 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: litellm-postgres
+    environment:
+      POSTGRES_DB: litellm
+      POSTGRES_USER: litellm_user
+      POSTGRES_PASSWORD: litellm_password
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U litellm_user -d litellm"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - litellm-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: litellm-redis
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - litellm-network
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-latest
+    container_name: litellm-proxy
+    ports:
+      - "8002:4000"
+    volumes:
+      - ./src/config/litellm_config.yaml:/app/config.yaml
+    environment:
+      DATABASE_URL: postgresql://litellm_user:litellm_password@postgres:5432/litellm
+      LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-dev-master-key-change-me}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    command: ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - litellm-network
+    restart: unless-stopped
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: litellm-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@litellm.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - litellm-network
+    profiles:
+      - pgadmin
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  litellm-network:
+    driver: bridge

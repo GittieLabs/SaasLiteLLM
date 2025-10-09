@@ -1,0 +1,59 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Environment files (use Railway env vars instead)
+.env
+.env.*
+!.env.example
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore
+docker/
+
+# Development
+.pytest_cache/
+.coverage
+.mypy_cache/
+.ruff_cache/
+tests/
+scripts/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Documentation
+README.md
+docs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Logs
+*.log
+logs/
