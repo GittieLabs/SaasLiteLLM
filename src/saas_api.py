@@ -12,8 +12,8 @@ from datetime import datetime
 import httpx
 import uuid
 
-from config.settings import settings
-from models.job_tracking import (
+from .config.settings import settings
+from .models.job_tracking import (
     Base, Job, LLMCall, JobCostSummary, TeamUsageSummary,
     WebhookRegistration, JobStatus
 )

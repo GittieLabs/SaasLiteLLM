@@ -6,7 +6,7 @@ from pathlib import Path
 # Add the src directory to Python path
 sys.path.insert(0, str(Path(__file__).parent))
 
-from config.settings import settings
+from .config.settings import settings
 
 def start_litellm_proxy():
     """Start LiteLLM proxy server"""
