@@ -93,21 +93,23 @@ See [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) for detailed examples.
 
 ### Railway Deployment
 
-1. **Connect to Railway:**
-   - Create a new Railway project
-   - Add a PostgreSQL service
-   - Connect your GitHub repository
+**📦 Pre-built Docker Images (Recommended)**
 
-2. **Configure environment variables in Railway:**
-   ```
-   DATABASE_URL=<from-railway-postgres>
-   LITELLM_MASTER_KEY=<generate-secure-key>
-   OPENAI_API_KEY=<your-openai-key>
-   ANTHROPIC_API_KEY=<your-anthropic-key>
-   ```
+We build Docker images automatically via GitHub Actions and push to GitHub Container Registry. This is the fastest and most reliable deployment method:
 
-3. **Deploy:**
-   - Railway will automatically deploy on push to main branch
+1. **Push to main branch** - GitHub Actions automatically builds images
+2. **Make images public** - Required for Railway to pull them
+3. **Deploy from GHCR**:
+   - LiteLLM: `ghcr.io/gittielabs/saaslitellm/litellm-proxy:latest`
+   - SaaS API: `ghcr.io/gittielabs/saaslitellm/saas-api:latest`
+
+> **📖 See [RAILWAY_GHCR_DEPLOYMENT.md](RAILWAY_GHCR_DEPLOYMENT.md) for complete step-by-step instructions**
+
+**Alternative: Build from Source**
+
+If you prefer Railway to build from source:
+
+> **📖 See [RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md) or [RAILWAY_CONFIG_GUIDE.md](RAILWAY_CONFIG_GUIDE.md)**
 
 ## Local Development
 
