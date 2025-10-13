@@ -34,6 +34,35 @@ Your SaaS App → SaaS API → LiteLLM Proxy → LLM Providers
 
 ---
 
+## Integration Patterns
+
+There are **two ways** to integrate with the SaaS LiteLLM API:
+
+### Pattern A: Job-Based API (Recommended)
+**Client → SaaS API → LiteLLM**
+
+- ✅ Use **model group names** (e.g., "ResumeAgent", "ChatAgent")
+- ✅ Automatic credit tracking (1 credit per completed job)
+- ✅ Job-based cost aggregation
+- ✅ Model fallbacks handled automatically
+- ✅ Centralized usage analytics
+
+**Use this for**: Multi-step workflows, complex operations, credit-based billing
+
+### Pattern B: Direct OpenAI-Compatible Calls
+**Client → LiteLLM Proxy directly**
+
+- ✅ Use **actual model names** (e.g., "gpt-3.5-turbo", "gpt-4")
+- ✅ Standard OpenAI SDK compatible
+- ✅ Lower latency (no intermediate layer)
+- ❌ No automatic credit tracking
+- ❌ No job-based aggregation
+- ❌ Manual fallback handling
+
+**Use this for**: Simple single-shot calls, OpenAI SDK drop-in replacement, streaming responses
+
+---
+
 ## Quick Start
 
 ### Base URL
@@ -823,6 +852,217 @@ async function analyzeDocument(documentContent) {
     throw error;
   }
 }
+```
+
+---
+
+## Direct OpenAI-Compatible Integration (Pattern B)
+
+For applications that need to use standard OpenAI SDK or want lower latency without job tracking, you can call LiteLLM directly.
+
+### Getting Started
+
+1. **Create team and get virtual key** (one-time setup):
+
+```bash
+curl -X POST https://llm-saas.usegittie.com/api/teams/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "organization_id": "org_your_company",
+    "team_id": "team_engineering",
+    "team_alias": "Engineering Team",
+    "model_groups": ["ChatAgent", "AnalysisAgent"],
+    "credits_allocated": 1000
+  }'
+```
+
+**Response includes:**
+```json
+{
+  "team_id": "team_engineering",
+  "model_groups": ["ChatAgent", "AnalysisAgent"],
+  "allowed_models": ["gpt-3.5-turbo", "gpt-4", "gpt-4-turbo"],
+  "virtual_key": "sk-xxx...",
+  "message": "Team created successfully with LiteLLM integration"
+}
+```
+
+**Important:** Save the `virtual_key` and `allowed_models` list!
+
+### LiteLLM Proxy URL
+
+```
+Production: https://llm.usegittie.com
+```
+
+### Python with OpenAI SDK
+
+```python
+from openai import OpenAI
+
+# Initialize with virtual key
+client = OpenAI(
+    api_key="sk-xxx...",  # Your team's virtual key
+    base_url="https://llm.usegittie.com"  # LiteLLM proxy URL
+)
+
+# Make calls with ACTUAL model names (not model groups!)
+response = client.chat.completions.create(
+    model="gpt-3.5-turbo",  # Use model name from allowed_models
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "Hello!"}
+    ]
+)
+
+print(response.choices[0].message.content)
+```
+
+### Node.js with OpenAI SDK
+
+```javascript
+import OpenAI from 'openai';
+
+const client = new OpenAI({
+  apiKey: 'sk-xxx...',  // Your team's virtual key
+  baseURL: 'https://llm.usegittie.com'  // LiteLLM proxy URL
+});
+
+async function chat() {
+  const response = await client.chat.completions.create({
+    model: 'gpt-3.5-turbo',  // Use model name from allowed_models
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant.' },
+      { role: 'user', content: 'Hello!' }
+    ]
+  });
+
+  console.log(response.choices[0].message.content);
+}
+```
+
+### Streaming Responses
+
+```python
+from openai import OpenAI
+
+client = OpenAI(
+    api_key="sk-xxx...",
+    base_url="https://llm.usegittie.com"
+)
+
+stream = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": "Tell me a story"}],
+    stream=True
+)
+
+for chunk in stream:
+    if chunk.choices[0].delta.content:
+        print(chunk.choices[0].delta.content, end='')
+```
+
+### Key Differences from SaaS API
+
+| Feature | SaaS API (Pattern A) | Direct LiteLLM (Pattern B) |
+|---------|---------------------|---------------------------|
+| Model Name | Model Group (e.g., "ResumeAgent") | Actual Model (e.g., "gpt-3.5-turbo") |
+| Credit Tracking | Automatic (1 per job) | Manual (you track) |
+| Fallbacks | Automatic (handled by SaaS API) | Manual (you implement) |
+| Job Tracking | Yes (job_id) | No |
+| Latency | +1 hop (SaaS API layer) | Direct to LiteLLM |
+| Streaming | Not supported | Supported |
+| OpenAI SDK | Custom client needed | Drop-in replacement |
+
+### Which Models Can I Use?
+
+When you create a team with model groups, the `allowed_models` field shows which **actual model names** you can use for direct calls:
+
+```json
+{
+  "model_groups": ["ChatAgent", "AnalysisAgent"],
+  "allowed_models": [
+    "gpt-3.5-turbo",
+    "gpt-4",
+    "gpt-4-turbo",
+    "claude-3-sonnet"
+  ]
+}
+```
+
+If a model group contains:
+- `ChatAgent`: gpt-3.5-turbo (priority 0), gpt-4 (priority 1)
+- `AnalysisAgent`: gpt-4-turbo (priority 0), claude-3-sonnet (priority 1)
+
+Your virtual key allows: **all 4 models** (deduplicated).
+
+### Budget Limits
+
+Your virtual key has a budget limit based on credits allocated:
+
+```
+Budget = Credits × $0.10
+```
+
+Example:
+- 1,000 credits allocated = $100 budget in LiteLLM
+- Once budget is exhausted, calls fail
+- Add more credits via SaaS API to increase budget
+
+### Error Handling
+
+```python
+from openai import OpenAI, OpenAIError
+
+client = OpenAI(
+    api_key="sk-xxx...",
+    base_url="https://llm.usegittie.com"
+)
+
+try:
+    response = client.chat.completions.create(
+        model="gpt-3.5-turbo",
+        messages=[{"role": "user", "content": "Hello"}]
+    )
+except OpenAIError as e:
+    if "budget" in str(e).lower():
+        print("Budget exhausted - add more credits!")
+    elif "model" in str(e).lower():
+        print("Model not allowed for your team")
+    else:
+        print(f"LiteLLM error: {e}")
+```
+
+### Mixing Both Patterns
+
+You can use both patterns simultaneously:
+
+```python
+from openai import OpenAI
+from your_saas_client import SaasLLMClient
+
+# For simple, streaming, or single-shot calls
+openai_client = OpenAI(
+    api_key="sk-xxx...",
+    base_url="https://llm.usegittie.com"
+)
+
+# For complex workflows with credit tracking
+saas_client = SaasLLMClient(
+    base_url="https://llm-saas.usegittie.com",
+    team_id="team_engineering"
+)
+
+# Simple chat - use OpenAI directly
+response = openai_client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": "Quick question..."}]
+)
+
+# Complex workflow - use SaaS API
+job_id = saas_client.create_job("document_analysis")
+result = saas_client.llm_call(job_id, "ResumeAgent", messages)
+saas_client.complete_job(job_id, "completed")  # Credit tracked!
 ```
 
 ---

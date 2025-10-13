@@ -31,6 +31,7 @@ class TeamResponse(BaseModel):
     team_id: str
     organization_id: str
     model_groups: List[str]
+    allowed_models: List[str]  # Actual model names for direct OpenAI-compatible calls
     credits_allocated: int
     credits_remaining: int
     virtual_key: Optional[str] = None
@@ -69,8 +70,10 @@ async def create_team(
             detail=f"Team '{request.team_id}' already exists"
         )
 
-    # Verify all model groups exist
+    # Verify all model groups exist and collect all unique model names
     model_group_ids = []
+    all_model_names = set()  # Collect all unique model names for virtual key
+
     for group_name in request.model_groups:
         group = db.query(ModelGroup).filter(
             ModelGroup.group_name == group_name
@@ -83,6 +86,15 @@ async def create_team(
             )
 
         model_group_ids.append((group_name, group.model_group_id))
+
+        # Get all models in this group for virtual key configuration
+        from ..models.model_groups import ModelGroupModel
+        group_models = db.query(ModelGroupModel).filter(
+            ModelGroupModel.model_group_id == group.model_group_id
+        ).all()
+
+        for model in group_models:
+            all_model_names.add(model.model_name)
 
     # Create team in LiteLLM
     litellm_service = get_litellm_service()
@@ -108,12 +120,17 @@ async def create_team(
 
         logger.info(f"Created team {request.team_id} in LiteLLM")
 
-        # Generate virtual key for team
+        # Generate virtual key for team with allowed models
+        # Convert model group names to actual model names for LiteLLM
         key_response = await litellm_service.generate_key(
             team_id=request.team_id,
             key_alias=f"{request.team_id}_key",
             max_budget=max_budget,
-            metadata={"created_by": "saas_api"}
+            models=list(all_model_names),  # Allow all models from assigned model groups
+            metadata={
+                "created_by": "saas_api",
+                "model_groups": request.model_groups  # Track which groups this key represents
+            }
         )
 
         virtual_key = key_response.get("key")
@@ -152,6 +169,7 @@ async def create_team(
         team_id=request.team_id,
         organization_id=request.organization_id,
         model_groups=request.model_groups,
+        allowed_models=sorted(list(all_model_names)),
         credits_allocated=credits.credits_allocated,
         credits_remaining=credits.credits_remaining,
         virtual_key=virtual_key,
