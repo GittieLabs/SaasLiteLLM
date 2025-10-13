@@ -213,3 +213,81 @@ async def delete_model_group(
     db.commit()
 
     return {"message": f"Model group '{group_name}' deleted successfully"}
+
+
+@router.get("/{group_name}/resolve")
+async def resolve_model_group(
+    group_name: str,
+    team_id: str,
+    db: Session = Depends(get_db)
+):
+    """
+    Resolve a model group to actual model name for a specific team.
+    Returns the primary model (priority 0) that the client should use.
+
+    This allows clients to ask "what model should I use for ResumeAgent?"
+    and get back the actual model name to pass to OpenAI SDK or LiteLLM.
+
+    Query params:
+        team_id: The team requesting model resolution
+
+    Example:
+        GET /api/model-groups/ResumeAgent/resolve?team_id=team_engineering
+
+        Returns: {
+            "group_name": "ResumeAgent",
+            "primary_model": "gpt-4o",
+            "fallback_models": ["gpt-4-turbo", "gpt-3.5-turbo"],
+            "team_has_access": true
+        }
+
+    Client usage pattern:
+        1. At session/job start, fetch model for each agent type you'll use
+        2. Cache the model name for that session/job
+        3. Use the model name in OpenAI SDK or LiteLLM calls
+        4. Centralized model management - update models without client code changes
+    """
+    from ..services.model_resolver import ModelResolver, ModelResolutionError
+
+    # Check if model group exists
+    group = db.query(ModelGroup).filter(
+        ModelGroup.group_name == group_name
+    ).first()
+
+    if not group:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Model group '{group_name}' not found"
+        )
+
+    # Check team access
+    team_access = db.query(TeamModelGroup).filter(
+        TeamModelGroup.team_id == team_id,
+        TeamModelGroup.model_group_id == group.model_group_id
+    ).first()
+
+    if not team_access:
+        return {
+            "group_name": group_name,
+            "primary_model": None,
+            "fallback_models": [],
+            "team_has_access": False,
+            "error": f"Team '{team_id}' does not have access to model group '{group_name}'"
+        }
+
+    # Resolve to actual models
+    try:
+        resolver = ModelResolver(db)
+        primary_model, fallback_models = resolver.resolve_model_group(
+            team_id=team_id,
+            model_group_name=group_name
+        )
+
+        return {
+            "group_name": group_name,
+            "primary_model": primary_model,
+            "fallback_models": fallback_models,
+            "team_has_access": True
+        }
+    except ModelResolutionError as e:
+        raise HTTPException(status_code=403, detail=str(e))

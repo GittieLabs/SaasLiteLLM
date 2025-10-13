@@ -856,6 +856,236 @@ async function analyzeDocument(documentContent) {
 
 ---
 
+## Model Resolution API (Recommended for OpenAI SDK)
+
+**The cleanest pattern for OpenAI SDK integration:** Let the API tell you which model to use!
+
+### How It Works
+
+1. **At session/job start**, ask the API: "What model should I use for ResumeAgent?"
+2. **Cache the model name** for your session/job duration
+3. **Use the model name** in OpenAI SDK calls
+4. **Centralized control**: You manage model versions without client code changes
+
+### Get Model for Agent Type
+
+```bash
+GET /api/model-groups/{group_name}/resolve?team_id=team_engineering
+```
+
+**Example Request:**
+```bash
+curl "https://llm-saas.usegittie.com/api/model-groups/ResumeAgent/resolve?team_id=team_engineering"
+```
+
+**Response:**
+```json
+{
+  "group_name": "ResumeAgent",
+  "primary_model": "gpt-4o",
+  "fallback_models": ["gpt-4-turbo", "gpt-3.5-turbo"],
+  "team_has_access": true
+}
+```
+
+### Python Implementation
+
+```python
+from openai import OpenAI
+import requests
+
+class AgentModelClient:
+    def __init__(self, saas_api_url, llm_proxy_url, team_id, virtual_key):
+        self.saas_api_url = saas_api_url
+        self.team_id = team_id
+        self.virtual_key = virtual_key
+
+        # Initialize OpenAI client with LiteLLM proxy
+        self.openai = OpenAI(
+            api_key=virtual_key,
+            base_url=llm_proxy_url
+        )
+
+        # Cache for resolved models (per session)
+        self.model_cache = {}
+
+    def get_model_for_agent(self, agent_type: str) -> str:
+        """
+        Resolve agent type to actual model name.
+        Caches result for session duration.
+        """
+        if agent_type not in self.model_cache:
+            response = requests.get(
+                f"{self.saas_api_url}/api/model-groups/{agent_type}/resolve",
+                params={"team_id": self.team_id}
+            )
+            response.raise_for_status()
+            data = response.json()
+
+            if not data.get("team_has_access"):
+                raise PermissionError(f"Team doesn't have access to {agent_type}")
+
+            self.model_cache[agent_type] = data["primary_model"]
+
+        return self.model_cache[agent_type]
+
+    def chat(self, agent_type: str, messages: list):
+        """
+        Make a chat completion using the agent's resolved model.
+        """
+        model = self.get_model_for_agent(agent_type)
+
+        return self.openai.chat.completions.create(
+            model=model,  # Actual model name from API
+            messages=messages
+        )
+
+# Usage
+client = AgentModelClient(
+    saas_api_url="https://llm-saas.usegittie.com",
+    llm_proxy_url="https://llm.usegittie.com",
+    team_id="team_engineering",
+    virtual_key="sk-xxx..."
+)
+
+# Client never needs to know actual model names!
+response = client.chat(
+    agent_type="ResumeAgent",  # Agent type, not model name
+    messages=[
+        {"role": "system", "content": "You are a resume analyzer."},
+        {"role": "user", "content": "Analyze this resume..."}
+    ]
+)
+
+print(response.choices[0].message.content)
+
+# Model is cached for session - no additional API calls
+response2 = client.chat("ResumeAgent", other_messages)
+```
+
+### Node.js Implementation
+
+```javascript
+import OpenAI from 'openai';
+
+class AgentModelClient {
+  constructor(saasApiUrl, llmProxyUrl, teamId, virtualKey) {
+    this.saasApiUrl = saasApiUrl;
+    this.teamId = teamId;
+    this.virtualKey = virtualKey;
+
+    // Initialize OpenAI client with LiteLLM proxy
+    this.openai = new OpenAI({
+      apiKey: virtualKey,
+      baseURL: llmProxyUrl
+    });
+
+    // Cache for resolved models
+    this.modelCache = {};
+  }
+
+  async getModelForAgent(agentType) {
+    if (!this.modelCache[agentType]) {
+      const response = await fetch(
+        `${this.saasApiUrl}/api/model-groups/${agentType}/resolve?team_id=${this.teamId}`
+      );
+
+      if (!response.ok) throw new Error(`Failed to resolve ${agentType}`);
+
+      const data = await response.json();
+
+      if (!data.team_has_access) {
+        throw new Error(`Team doesn't have access to ${agentType}`);
+      }
+
+      this.modelCache[agentType] = data.primary_model;
+    }
+
+    return this.modelCache[agentType];
+  }
+
+  async chat(agentType, messages) {
+    const model = await this.getModelForAgent(agentType);
+
+    return await this.openai.chat.completions.create({
+      model,  // Actual model name from API
+      messages
+    });
+  }
+}
+
+// Usage
+const client = new AgentModelClient(
+  'https://llm-saas.usegittie.com',
+  'https://llm.usegittie.com',
+  'team_engineering',
+  'sk-xxx...'
+);
+
+// Clean agent-based API
+const response = await client.chat('ResumeAgent', [
+  { role: 'system', content: 'You are a resume analyzer.' },
+  { role: 'user', content: 'Analyze this resume...' }
+]);
+
+console.log(response.choices[0].message.content);
+```
+
+### Benefits
+
+✅ **Centralized Model Management**
+- Change "ResumeAgent" from gpt-4 → gpt-4o without updating client code
+- Clients only reference agent types, not model versions
+
+✅ **Access Control**
+- API enforces which teams can use which agent types
+- Returns error if team doesn't have access
+
+✅ **Caching-Friendly**
+- Fetch once per session/job
+- No repeated API calls
+- Simple in-memory cache
+
+✅ **Fallback Awareness**
+- API returns fallback models if you want to implement your own retry logic
+- Primary model is always priority 0
+
+### Example: Multi-Agent Session
+
+```python
+# Session start - resolve all agents you'll use
+client = AgentModelClient(...)
+
+# Fetch and cache models for all agents
+resume_model = client.get_model_for_agent("ResumeAgent")      # gpt-4o
+chat_model = client.get_model_for_agent("ChatAgent")          # gpt-3.5-turbo
+analysis_model = client.get_model_for_agent("AnalysisAgent")  # gpt-4-turbo
+
+# Now use them throughout your session
+# (no additional API calls to resolve models)
+
+# Parse resume
+parse_result = client.chat("ResumeAgent", parse_messages)
+
+# Analyze parsed data
+analysis = client.chat("AnalysisAgent", analysis_messages)
+
+# Chat with user about results
+response = client.chat("ChatAgent", chat_messages)
+```
+
+### When Models Change
+
+**Scenario:** You update ResumeAgent from gpt-4 → gpt-4o in the API
+
+```python
+# Old sessions: continue using cached gpt-4 (until they restart)
+# New sessions: automatically get gpt-4o
+# Zero client code changes required! ✨
+```
+
+---
+
 ## Direct OpenAI-Compatible Integration (Pattern B)
 
 For applications that need to use standard OpenAI SDK or want lower latency without job tracking, you can call LiteLLM directly.
