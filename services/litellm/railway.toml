@@ -1,9 +1,0 @@
-# Railway config for LiteLLM service
-[build]
-builder = "dockerfile"
-
-[deploy]
-startCommand = "--config /app/config.yaml --port 4000 --detailed_debug"
-healthcheckPath = "/health"
-healthcheckTimeout = 100
-restartPolicyType = "on_failure"
