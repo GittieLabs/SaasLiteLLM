@@ -4,6 +4,7 @@
 
 [build]
 builder = "dockerfile"
+dockerfilePath = "Dockerfile.saas"
 
 [deploy]
 healthcheckPath = "/health"
