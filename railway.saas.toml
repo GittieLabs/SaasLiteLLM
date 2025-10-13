@@ -1,7 +1,9 @@
 # Railway config for SaaS API service
+# Set in Railway dashboard: Settings > Config File Path = railway.saas.toml
+
 [build]
 builder = "dockerfile"
-dockerfilePath = "Dockerfile"
+dockerfilePath = "Dockerfile.saas"
 
 [deploy]
 healthcheckPath = "/health"
