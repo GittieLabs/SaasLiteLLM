@@ -13,11 +13,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy dependency files from project root
-COPY ../../pyproject.toml ./
-COPY ../../README.md ./
+COPY pyproject.toml ./
+COPY README.md ./
 
 # Copy application code from project root
-COPY ../../src/ ./src/
+COPY src/ ./src/
 
 # Install build tools and Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \

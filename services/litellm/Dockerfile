@@ -6,7 +6,7 @@ FROM ghcr.io/berriai/litellm:main-latest
 WORKDIR /app
 
 # Copy configuration file from project root
-COPY ../../src/config/litellm_config.yaml /app/config.yaml
+COPY src/config/litellm_config.yaml /app/config.yaml
 
 # Expose port (Railway will use PORT env var)
 EXPOSE 4000
