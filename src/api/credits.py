@@ -7,6 +7,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from ..services.credit_manager import get_credit_manager, InsufficientCreditsError
 from ..models.job_tracking import get_db
+from ..auth.dependencies import verify_virtual_key
 
 router = APIRouter(prefix="/api/credits", tags=["credits"])
 
@@ -21,11 +22,21 @@ class AddCreditsRequest(BaseModel):
 @router.get("/teams/{team_id}/balance")
 async def get_credit_balance(
     team_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
 ):
     """
-    Get credit balance for a team
+    Get credit balance for a team.
+
+    Requires: Authorization header with virtual API key
     """
+    # Verify authenticated team matches requested team
+    if team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot access credit balance for a different team"
+        )
+
     credit_manager = get_credit_manager(db)
     credits = credit_manager.get_team_credits(team_id)
 
@@ -42,11 +53,21 @@ async def get_credit_balance(
 async def add_credits(
     team_id: str,
     request: AddCreditsRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
 ):
     """
-    Add credits to a team's balance
+    Add credits to a team's balance.
+
+    Requires: Authorization header with virtual API key
     """
+    # Verify authenticated team matches requested team
+    if team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot add credits to a different team"
+        )
+
     credit_manager = get_credit_manager(db)
 
     try:
@@ -73,11 +94,21 @@ async def add_credits(
 async def get_credit_transactions(
     team_id: str,
     limit: int = 50,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
 ):
     """
-    Get credit transaction history for a team
+    Get credit transaction history for a team.
+
+    Requires: Authorization header with virtual API key
     """
+    # Verify authenticated team matches requested team
+    if team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot access credit transactions for a different team"
+        )
+
     credit_manager = get_credit_manager(db)
     transactions = credit_manager.get_credit_transactions(
         team_id=team_id,
@@ -95,11 +126,21 @@ async def get_credit_transactions(
 async def check_credits(
     team_id: str,
     credits_needed: int = 1,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
 ):
     """
-    Check if team has sufficient credits
+    Check if team has sufficient credits.
+
+    Requires: Authorization header with virtual API key
     """
+    # Verify authenticated team matches requested team
+    if team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot check credits for a different team"
+        )
+
     credit_manager = get_credit_manager(db)
 
     try:

@@ -21,6 +21,9 @@ from .models.job_tracking import (
 # Import new API routers
 from .api import organizations, model_groups, teams, credits
 
+# Import authentication
+from .auth.dependencies import verify_virtual_key
+
 # Create FastAPI app
 app = FastAPI(
     title="SaaS LLM API",
@@ -175,11 +178,24 @@ async def health_check():
 
 
 @app.post("/api/jobs/create", response_model=JobCreateResponse)
-async def create_job(request: JobCreateRequest, db: Session = Depends(get_db)):
+async def create_job(
+    request: JobCreateRequest,
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
+):
     """
     Create a new job for tracking multiple LLM calls.
     Teams use this to start a business operation.
+
+    Requires: Authorization header with virtual API key
     """
+    # Verify that the authenticated team matches the request
+    if request.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"API key does not belong to team '{request.team_id}'"
+        )
+
     job = Job(
         team_id=request.team_id,
         user_id=request.user_id,
@@ -203,11 +219,14 @@ async def create_job(request: JobCreateRequest, db: Session = Depends(get_db)):
 async def make_llm_call(
     job_id: str,
     request: LLMCallRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
 ):
     """
     Make an LLM call within a job context using model group resolution.
     Automatically tracks costs and associates with job.
+
+    Requires: Authorization header with virtual API key
     """
     from .models.credits import TeamCredits
     from .services.model_resolver import ModelResolver, ModelResolutionError
@@ -216,6 +235,13 @@ async def make_llm_call(
     job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Verify job belongs to authenticated team
+    if job.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Job does not belong to your team"
+        )
 
     # Get team credits and virtual key
     team_credits = db.query(TeamCredits).filter(
@@ -337,17 +363,27 @@ async def make_llm_call(
 async def complete_job(
     job_id: str,
     request: JobCompleteRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
 ):
     """
     Mark job as complete, deduct credits if successful, and return aggregated costs.
     Credits are only deducted for successfully completed jobs with no failed calls.
+
+    Requires: Authorization header with virtual API key
     """
     from .services.credit_manager import get_credit_manager, InsufficientCreditsError
 
     job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Verify job belongs to authenticated team
+    if job.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Job does not belong to your team"
+        )
 
     # Update job status
     job.status = JobStatus(request.status)
@@ -442,24 +478,52 @@ async def complete_job(
 
 
 @app.get("/api/jobs/{job_id}")
-async def get_job(job_id: str, db: Session = Depends(get_db)):
-    """Get job details"""
+async def get_job(
+    job_id: str,
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
+):
+    """
+    Get job details.
+
+    Requires: Authorization header with virtual API key
+    """
     job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Verify job belongs to authenticated team
+    if job.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Job does not belong to your team"
+        )
 
     return job.to_dict()
 
 
 @app.get("/api/jobs/{job_id}/costs")
-async def get_job_costs(job_id: str, db: Session = Depends(get_db)):
+async def get_job_costs(
+    job_id: str,
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
+):
     """
     Get detailed cost breakdown for a job.
     This endpoint is for YOUR internal use - not exposed to teams.
+
+    Requires: Authorization header with virtual API key
     """
     job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Verify job belongs to authenticated team
+    if job.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Job does not belong to your team"
+        )
 
     calls = db.query(LLMCall).filter(LLMCall.job_id == job.job_id).all()
 
@@ -494,12 +558,21 @@ async def get_job_costs(job_id: str, db: Session = Depends(get_db)):
 async def get_team_usage(
     team_id: str,
     period: str,  # e.g., "2024-10" or "2024-10-08"
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
 ):
     """
     Get team usage summary for a period.
     For your internal billing and analytics.
+
+    Requires: Authorization header with virtual API key
     """
+    # Verify authenticated team matches requested team
+    if team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot access usage data for a different team"
+        )
     # Get or create summary
     summary = db.query(TeamUsageSummary).filter(
         TeamUsageSummary.team_id == team_id,
@@ -559,9 +632,21 @@ async def list_team_jobs(
     limit: int = 100,
     offset: int = 0,
     status: Optional[str] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
 ):
-    """List jobs for a team"""
+    """
+    List jobs for a team.
+
+    Requires: Authorization header with virtual API key
+    """
+    # Verify authenticated team matches requested team
+    if team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot access jobs for a different team"
+        )
+
     query = db.query(Job).filter(Job.team_id == team_id)
 
     if status:

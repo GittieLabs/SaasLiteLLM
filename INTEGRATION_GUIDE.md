@@ -5,6 +5,7 @@ Complete guide for integrating the SaaS LiteLLM API into your projects.
 ## Table of Contents
 
 - [Overview](#overview)
+- [Authentication](#authentication)
 - [Understanding Jobs & Credits](#understanding-jobs--credits)
 - [Integration Patterns](#integration-patterns)
 - [Quick Start](#quick-start)
@@ -28,6 +29,7 @@ The SaaS LiteLLM API provides a job-based abstraction layer for LLM calls with:
 - **Model groups**: Named collections of models with fallbacks
 - **Cost tracking**: Track actual LLM costs vs credits charged
 - **Virtual keys**: Team-specific API keys with budget limits
+- **Secure authentication**: All API calls require virtual key authentication
 
 ### Architecture
 
@@ -35,6 +37,111 @@ The SaaS LiteLLM API provides a job-based abstraction layer for LLM calls with:
 Your SaaS App → SaaS API → LiteLLM Proxy → LLM Providers
                     ↓
                 PostgreSQL (tracking, billing)
+```
+
+---
+
+## Authentication
+
+All API endpoints (except organization and model group creation) require authentication using your team's virtual API key.
+
+### Getting Your Virtual Key
+
+When you create a team, the API returns a `virtual_key`:
+
+```bash
+curl -X POST https://llm-saas.usegittie.com/api/teams/create \
+  -H "Content-Type: application/json" \
+  -d '{
+    "organization_id": "org_your_company",
+    "team_id": "team_engineering",
+    "team_alias": "Engineering Team",
+    "model_groups": ["ChatAgent"],
+    "credits_allocated": 1000
+  }'
+```
+
+**Response:**
+```json
+{
+  "team_id": "team_engineering",
+  "virtual_key": "sk-xxx...",
+  "credits_allocated": 1000,
+  "credits_remaining": 1000
+}
+```
+
+**Important:** Save the `virtual_key` - this is your team's API key for all subsequent requests.
+
+### Using the Virtual Key
+
+Include the virtual key in the `Authorization` header for all API calls:
+
+```http
+Authorization: Bearer sk-xxx...
+```
+
+### Example API Calls with Authentication
+
+```bash
+# Create a job (with authentication)
+curl -X POST https://llm-saas.usegittie.com/api/jobs/create \
+  -H "Authorization: Bearer sk-xxx..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "team_id": "team_engineering",
+    "job_type": "document_analysis",
+    "metadata": {}
+  }'
+
+# Make an LLM call (with authentication)
+curl -X POST "https://llm-saas.usegittie.com/api/jobs/{job_id}/llm-call" \
+  -H "Authorization: Bearer sk-xxx..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model_group": "ChatAgent",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
+
+# Check credit balance (with authentication)
+curl -X GET "https://llm-saas.usegittie.com/api/credits/teams/team_engineering/balance" \
+  -H "Authorization: Bearer sk-xxx..."
+```
+
+### Security Notes
+
+✅ **DO:**
+- Store virtual keys securely (environment variables, secrets manager)
+- Never commit keys to version control
+- Use different keys for different teams/environments
+- Rotate keys periodically
+
+❌ **DON'T:**
+- Hardcode keys in your application code
+- Share keys across multiple teams
+- Expose keys in client-side JavaScript
+
+### Authentication Errors
+
+**Missing Authorization Header:**
+```json
+{
+  "detail": "Missing Authorization header. Expected: 'Authorization: Bearer sk-xxx...'"
+}
+```
+
+**Invalid API Key:**
+```json
+{
+  "detail": "Invalid API key"
+}
+```
+
+**Wrong Team:**
+```json
+{
+  "detail": "API key does not belong to team 'team_xxx'"
+}
 ```
 
 ---
@@ -244,8 +351,12 @@ curl -X POST https://llm-saas.usegittie.com/api/teams/create \
 ### 2. Make LLM Calls
 
 ```bash
+# Set your virtual key from step 1
+VIRTUAL_KEY="sk-xxx..."
+
 # Create a job
 JOB_ID=$(curl -s -X POST https://llm-saas.usegittie.com/api/jobs/create \
+  -H "Authorization: Bearer $VIRTUAL_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "team_id": "team_engineering",
@@ -256,6 +367,7 @@ JOB_ID=$(curl -s -X POST https://llm-saas.usegittie.com/api/jobs/create \
 
 # Make LLM call
 curl -X POST "https://llm-saas.usegittie.com/api/jobs/$JOB_ID/llm-call" \
+  -H "Authorization: Bearer $VIRTUAL_KEY" \
   -H "Content-Type: application/json" \
   -d '{
     "model_group": "ChatAgent",
@@ -267,7 +379,8 @@ curl -X POST "https://llm-saas.usegittie.com/api/jobs/$JOB_ID/llm-call" \
 
 # Complete job (deducts credit)
 curl -X POST "https://llm-saas.usegittie.com/api/jobs/$JOB_ID/complete" \
-  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $VIRTUAL_KEY" \
+  -H "Content-Type": application/json" \
   -d '{
     "status": "completed",
     "metadata": {"result": "success"}
@@ -675,11 +788,17 @@ GET /api/teams/{team_id}/jobs?limit=100&offset=0&status=completed
 // 1. Initialize with team context
 const teamId = "team_engineering";
 const userId = getCurrentUserId();
+const virtualKey = "sk-xxx...";  // Your team's virtual API key
+
+const headers = {
+  'Authorization': `Bearer ${virtualKey}`,
+  'Content-Type': 'application/json'
+};
 
 // 2. Create job for tracking
 const job = await fetch(`${API_BASE}/api/jobs/create`, {
   method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
+  headers,
   body: JSON.stringify({
     team_id: teamId,
     user_id: userId,
@@ -697,7 +816,7 @@ try {
   // 3. Make one or more LLM calls
   const parseResult = await fetch(`${API_BASE}/api/jobs/${jobId}/llm-call`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       model_group: 'ResumeAgent',
       messages: [
@@ -710,7 +829,7 @@ try {
 
   const analysisResult = await fetch(`${API_BASE}/api/jobs/${jobId}/llm-call`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       model_group: 'ResumeAgent',
       messages: [
@@ -723,7 +842,7 @@ try {
   // 4. Complete job successfully
   const completion = await fetch(`${API_BASE}/api/jobs/${jobId}/complete`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       status: 'completed',
       metadata: {
@@ -739,7 +858,7 @@ try {
   // 5. Complete job as failed (no credit deduction)
   await fetch(`${API_BASE}/api/jobs/${jobId}/complete`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       status: 'failed',
       error_message: error.message
@@ -761,9 +880,14 @@ import requests
 from typing import Dict, List
 
 class ResumeAnalyzer:
-    def __init__(self, base_url: str, team_id: str):
+    def __init__(self, base_url: str, team_id: str, virtual_key: str):
         self.base_url = base_url
         self.team_id = team_id
+        self.virtual_key = virtual_key
+        self.headers = {
+            "Authorization": f"Bearer {virtual_key}",
+            "Content-Type": "application/json"
+        }
 
     def analyze_resume(self, resume_text: str, job_requirements: List[str]) -> Dict:
         """
@@ -773,6 +897,7 @@ class ResumeAnalyzer:
         # Step 1: Create job
         job_response = requests.post(
             f"{self.base_url}/api/jobs/create",
+            headers=self.headers,
             json={
                 "team_id": self.team_id,
                 "job_type": "resume_analysis",
@@ -789,6 +914,7 @@ class ResumeAnalyzer:
             # Step 2: Parse resume (LLM Call #1)
             parse_response = requests.post(
                 f"{self.base_url}/api/jobs/{job_id}/llm-call",
+                headers=self.headers,
                 json={
                     "model_group": "ResumeAgent",
                     "messages": [
@@ -810,6 +936,7 @@ class ResumeAnalyzer:
             # Step 3: Compare requirements (LLM Call #2)
             compare_response = requests.post(
                 f"{self.base_url}/api/jobs/{job_id}/llm-call",
+                headers=self.headers,
                 json={
                     "model_group": "ResumeAgent",
                     "messages": [
@@ -831,6 +958,7 @@ class ResumeAnalyzer:
             # Step 4: Generate executive summary (LLM Call #3)
             summary_response = requests.post(
                 f"{self.base_url}/api/jobs/{job_id}/llm-call",
+                headers=self.headers,
                 json={
                     "model_group": "ResumeAgent",
                     "messages": [
@@ -852,6 +980,7 @@ class ResumeAnalyzer:
             # Step 5: Complete job (triggers 1 credit deduction)
             completion_response = requests.post(
                 f"{self.base_url}/api/jobs/{job_id}/complete",
+                headers=self.headers,
                 json={
                     "status": "completed",
                     "metadata": {
@@ -879,6 +1008,7 @@ class ResumeAnalyzer:
             # If anything fails, mark job as failed (no credit charge)
             requests.post(
                 f"{self.base_url}/api/jobs/{job_id}/complete",
+                headers=self.headers,
                 json={
                     "status": "failed",
                     "error_message": str(e)
@@ -890,7 +1020,8 @@ class ResumeAnalyzer:
 # Usage
 analyzer = ResumeAnalyzer(
     base_url="https://llm-saas.usegittie.com",
-    team_id="team_hr"
+    team_id="team_hr",
+    virtual_key="sk-xxx..."  # Your team's virtual API key
 )
 
 result = analyzer.analyze_resume(
@@ -986,14 +1117,20 @@ import requests
 from typing import Dict, List, Any
 
 class SaasLLMClient:
-    def __init__(self, base_url: str, team_id: str):
+    def __init__(self, base_url: str, team_id: str, virtual_key: str):
         self.base_url = base_url
         self.team_id = team_id
+        self.virtual_key = virtual_key
+        self.headers = {
+            "Authorization": f"Bearer {virtual_key}",
+            "Content-Type": "application/json"
+        }
 
     def create_job(self, job_type: str, user_id: str = None, metadata: Dict = None) -> str:
         """Create a new job and return job_id"""
         response = requests.post(
             f"{self.base_url}/api/jobs/create",
+            headers=self.headers,
             json={
                 "team_id": self.team_id,
                 "user_id": user_id,
@@ -1015,6 +1152,7 @@ class SaasLLMClient:
         """Make an LLM call within a job context"""
         response = requests.post(
             f"{self.base_url}/api/jobs/{job_id}/llm-call",
+            headers=self.headers,
             json={
                 "model_group": model_group,
                 "messages": messages,
@@ -1035,6 +1173,7 @@ class SaasLLMClient:
         """Complete a job and get cost summary"""
         response = requests.post(
             f"{self.base_url}/api/jobs/{job_id}/complete",
+            headers=self.headers,
             json={
                 "status": status,
                 "metadata": metadata or {},
@@ -1047,7 +1186,8 @@ class SaasLLMClient:
     def get_credits(self) -> Dict[str, Any]:
         """Get team credit balance"""
         response = requests.get(
-            f"{self.base_url}/api/credits/teams/{self.team_id}/balance"
+            f"{self.base_url}/api/credits/teams/{self.team_id}/balance",
+            headers=self.headers
         )
         response.raise_for_status()
         return response.json()
@@ -1055,7 +1195,8 @@ class SaasLLMClient:
 # Usage
 client = SaasLLMClient(
     base_url="https://llm-saas.usegittie.com",
-    team_id="team_engineering"
+    team_id="team_engineering",
+    virtual_key="sk-xxx..."  # Your team's virtual API key
 )
 
 # Document analysis workflow
@@ -1109,15 +1250,20 @@ except Exception as e:
 
 ```javascript
 class SaasLLMClient {
-  constructor(baseUrl, teamId) {
+  constructor(baseUrl, teamId, virtualKey) {
     this.baseUrl = baseUrl;
     this.teamId = teamId;
+    this.virtualKey = virtualKey;
+    this.headers = {
+      'Authorization': `Bearer ${virtualKey}`,
+      'Content-Type': 'application/json'
+    };
   }
 
   async createJob(jobType, userId = null, metadata = {}) {
     const response = await fetch(`${this.baseUrl}/api/jobs/create`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.headers,
       body: JSON.stringify({
         team_id: this.teamId,
         user_id: userId,
@@ -1134,7 +1280,7 @@ class SaasLLMClient {
   async llmCall(jobId, modelGroup, messages, options = {}) {
     const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}/llm-call`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.headers,
       body: JSON.stringify({
         model_group: modelGroup,
         messages,
@@ -1151,7 +1297,7 @@ class SaasLLMClient {
   async completeJob(jobId, status = 'completed', metadata = {}, errorMessage = null) {
     const response = await fetch(`${this.baseUrl}/api/jobs/${jobId}/complete`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.headers,
       body: JSON.stringify({
         status,
         metadata,
@@ -1164,7 +1310,9 @@ class SaasLLMClient {
   }
 
   async getCredits() {
-    const response = await fetch(`${this.baseUrl}/api/credits/teams/${this.teamId}/balance`);
+    const response = await fetch(`${this.baseUrl}/api/credits/teams/${this.teamId}/balance`, {
+      headers: this.headers
+    });
     if (!response.ok) throw new Error(`Failed to get credits: ${await response.text()}`);
     return await response.json();
   }
@@ -1173,7 +1321,8 @@ class SaasLLMClient {
 // Usage
 const client = new SaasLLMClient(
   'https://llm-saas.usegittie.com',
-  'team_engineering'
+  'team_engineering',
+  'sk-xxx...'  // Your team's virtual API key
 );
 
 async function analyzeDocument(documentContent) {

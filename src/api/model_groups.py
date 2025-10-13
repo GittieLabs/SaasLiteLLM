@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 import uuid
 from ..models.model_groups import ModelGroup, ModelGroupModel, TeamModelGroup
 from ..models.job_tracking import get_db
+from ..auth.dependencies import verify_virtual_key
 
 router = APIRouter(prefix="/api/model-groups", tags=["model-groups"])
 
@@ -219,7 +220,8 @@ async def delete_model_group(
 async def resolve_model_group(
     group_name: str,
     team_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
 ):
     """
     Resolve a model group to actual model name for a specific team.
@@ -227,6 +229,8 @@ async def resolve_model_group(
 
     This allows clients to ask "what model should I use for ResumeAgent?"
     and get back the actual model name to pass to OpenAI SDK or LiteLLM.
+
+    Requires: Authorization header with virtual API key
 
     Query params:
         team_id: The team requesting model resolution
@@ -248,6 +252,13 @@ async def resolve_model_group(
         4. Centralized model management - update models without client code changes
     """
     from ..services.model_resolver import ModelResolver, ModelResolutionError
+
+    # Verify authenticated team matches requested team
+    if team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot resolve model group for a different team"
+        )
 
     # Check if model group exists
     group = db.query(ModelGroup).filter(
