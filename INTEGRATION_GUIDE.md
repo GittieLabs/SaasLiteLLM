@@ -943,7 +943,7 @@ class AgentModelClient:
 # Usage
 client = AgentModelClient(
     saas_api_url="https://llm-saas.usegittie.com",
-    llm_proxy_url="https://llm.usegittie.com",
+    llm_proxy_url="https://llm-proxy.usegittie.com",
     team_id="team_engineering",
     virtual_key="sk-xxx..."
 )
@@ -1017,7 +1017,7 @@ class AgentModelClient {
 // Usage
 const client = new AgentModelClient(
   'https://llm-saas.usegittie.com',
-  'https://llm.usegittie.com',
+  'https://llm-proxy.usegittie.com',
   'team_engineering',
   'sk-xxx...'
 );
@@ -1122,7 +1122,7 @@ curl -X POST https://llm-saas.usegittie.com/api/teams/create \
 ### LiteLLM Proxy URL
 
 ```
-Production: https://llm.usegittie.com
+Production: https://llm-proxy.usegittie.com
 ```
 
 ### Python with OpenAI SDK
@@ -1133,7 +1133,7 @@ from openai import OpenAI
 # Initialize with virtual key
 client = OpenAI(
     api_key="sk-xxx...",  # Your team's virtual key
-    base_url="https://llm.usegittie.com"  # LiteLLM proxy URL
+    base_url="https://llm-proxy.usegittie.com"  # LiteLLM proxy URL
 )
 
 # Make calls with ACTUAL model names (not model groups!)
@@ -1155,7 +1155,7 @@ import OpenAI from 'openai';
 
 const client = new OpenAI({
   apiKey: 'sk-xxx...',  // Your team's virtual key
-  baseURL: 'https://llm.usegittie.com'  // LiteLLM proxy URL
+  baseURL: 'https://llm-proxy.usegittie.com'  // LiteLLM proxy URL
 });
 
 async function chat() {
@@ -1178,7 +1178,7 @@ from openai import OpenAI
 
 client = OpenAI(
     api_key="sk-xxx...",
-    base_url="https://llm.usegittie.com"
+    base_url="https://llm-proxy.usegittie.com"
 )
 
 stream = client.chat.completions.create(
@@ -1246,7 +1246,7 @@ from openai import OpenAI, OpenAIError
 
 client = OpenAI(
     api_key="sk-xxx...",
-    base_url="https://llm.usegittie.com"
+    base_url="https://llm-proxy.usegittie.com"
 )
 
 try:
@@ -1274,7 +1274,7 @@ from your_saas_client import SaasLLMClient
 # For simple, streaming, or single-shot calls
 openai_client = OpenAI(
     api_key="sk-xxx...",
-    base_url="https://llm.usegittie.com"
+    base_url="https://llm-proxy.usegittie.com"
 )
 
 # For complex workflows with credit tracking
