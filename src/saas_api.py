@@ -18,12 +18,21 @@ from .models.job_tracking import (
     WebhookRegistration, JobStatus
 )
 
+# Import new API routers
+from .api import organizations, model_groups, teams, credits
+
 # Create FastAPI app
 app = FastAPI(
     title="SaaS LLM API",
-    description="Job-based LLM API with cost tracking",
-    version="1.0.0"
+    description="Job-based LLM API with cost tracking and model group management",
+    version="2.0.0"
 )
+
+# Include new routers
+app.include_router(organizations.router)
+app.include_router(model_groups.router)
+app.include_router(teams.router)
+app.include_router(credits.router)
 
 # Database setup
 engine = create_engine(settings.database_url)
@@ -54,6 +63,7 @@ class JobCreateResponse(BaseModel):
 
 
 class LLMCallRequest(BaseModel):
+    model_group: str  # Name of model group (e.g., "ResumeAgent", "ParsingAgent")
     messages: List[Dict[str, str]]
     purpose: Optional[str] = None
     temperature: Optional[float] = 0.7
@@ -82,26 +92,26 @@ class JobCompleteResponse(BaseModel):
 
 # Helper Functions
 async def call_litellm(
+    model: str,
     messages: List[Dict[str, str]],
+    virtual_key: str,
     team_id: str,
     temperature: float = 0.7,
     max_tokens: Optional[int] = None
 ) -> Dict[str, Any]:
     """
-    Call LiteLLM proxy with team-specific virtual key.
+    Call LiteLLM proxy with resolved model and team-specific virtual key.
     Returns response with usage and cost data.
     """
-    # Get team's virtual API key from LiteLLM
-    # For now, using master key - in production, you'd use team-specific keys
     litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
 
     headers = {
-        "Authorization": f"Bearer {settings.litellm_master_key}",
+        "Authorization": f"Bearer {virtual_key}",  # Use team virtual key
         "Content-Type": "application/json"
     }
 
     payload = {
-        "model": "gpt-3.5-turbo",  # Default model - could be configurable
+        "model": model,  # Resolved model from model group
         "messages": messages,
         "temperature": temperature,
         "user": team_id,  # For LiteLLM tracking
@@ -186,13 +196,33 @@ async def make_llm_call(
     db: Session = Depends(get_db)
 ):
     """
-    Make an LLM call within a job context.
+    Make an LLM call within a job context using model group resolution.
     Automatically tracks costs and associates with job.
     """
+    from .models.credits import TeamCredits
+    from .services.model_resolver import ModelResolver, ModelResolutionError
+
     # Get job
     job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
+
+    # Get team credits and virtual key
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == job.team_id
+    ).first()
+
+    if not team_credits:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team '{job.team_id}' not found"
+        )
+
+    if not team_credits.virtual_key:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Team '{job.team_id}' has no virtual key configured"
+        )
 
     # Update job status to in_progress if pending
     if job.status == JobStatus.PENDING:
@@ -200,11 +230,31 @@ async def make_llm_call(
         job.started_at = datetime.utcnow()
         db.commit()
 
-    # Call LiteLLM
+    # Resolve model group to actual model
+    model_resolver = ModelResolver(db)
+
+    try:
+        primary_model, fallback_models = model_resolver.resolve_model_group(
+            team_id=job.team_id,
+            model_group_name=request.model_group
+        )
+    except ModelResolutionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    # Track this model group usage (add to list if not already there)
+    if not job.model_groups_used:
+        job.model_groups_used = []
+    if request.model_group not in job.model_groups_used:
+        job.model_groups_used.append(request.model_group)
+        db.commit()
+
+    # Call LiteLLM with resolved model
     start_time = datetime.utcnow()
     try:
         litellm_response = await call_litellm(
+            model=primary_model,
             messages=request.messages,
+            virtual_key=team_credits.virtual_key,
             team_id=job.team_id,
             temperature=request.temperature,
             max_tokens=request.max_tokens
@@ -223,18 +273,20 @@ async def make_llm_call(
         # For now, estimate: gpt-3.5-turbo is $0.0005/1K prompt, $0.0015/1K completion
         cost_usd = (prompt_tokens * 0.0005 / 1000) + (completion_tokens * 0.0015 / 1000)
 
-        # Store LLM call record
+        # Store LLM call record with model group tracking
         llm_call = LLMCall(
             job_id=job.job_id,
             litellm_request_id=litellm_response.get("id"),
-            model_used=litellm_response.get("model", "gpt-3.5-turbo"),
+            model_used=litellm_response.get("model", primary_model),
+            model_group_used=request.model_group,
+            resolved_model=primary_model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
             cost_usd=cost_usd,
             latency_ms=latency_ms,
             purpose=request.purpose,
-            request_data={"messages": request.messages},
+            request_data={"messages": request.messages, "model_group": request.model_group},
             response_data=litellm_response
         )
 
@@ -251,7 +303,8 @@ async def make_llm_call(
             },
             metadata={
                 "tokens_used": total_tokens,
-                "latency_ms": latency_ms
+                "latency_ms": latency_ms,
+                "model_group": request.model_group
             }
         )
 
@@ -259,9 +312,10 @@ async def make_llm_call(
         # Record failed call
         llm_call = LLMCall(
             job_id=job.job_id,
+            model_group_used=request.model_group,
             purpose=request.purpose,
             error=str(e),
-            request_data={"messages": request.messages}
+            request_data={"messages": request.messages, "model_group": request.model_group}
         )
         db.add(llm_call)
         db.commit()
@@ -276,9 +330,11 @@ async def complete_job(
     db: Session = Depends(get_db)
 ):
     """
-    Mark job as complete and return aggregated costs.
-    This is when you calculate total cost for the business operation.
+    Mark job as complete, deduct credits if successful, and return aggregated costs.
+    Credits are only deducted for successfully completed jobs with no failed calls.
     """
+    from .services.credit_manager import get_credit_manager, InsufficientCreditsError
+
     job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
@@ -291,10 +347,42 @@ async def complete_job(
     if request.metadata:
         job.job_metadata.update(request.metadata)
 
-    db.commit()
-
     # Calculate costs
     costs = calculate_job_costs(db, job.job_id)
+
+    # Credit deduction logic
+    credit_manager = get_credit_manager(db)
+
+    # Deduct credit only if:
+    # 1. Job status is "completed" (not "failed")
+    # 2. No failed LLM calls
+    # 3. Credit hasn't already been applied
+    if (request.status == "completed" and
+        costs["failed_calls"] == 0 and
+        not job.credit_applied):
+
+        try:
+            # Deduct 1 credit for successful job
+            credit_manager.deduct_credit(
+                team_id=job.team_id,
+                job_id=job.job_id,
+                credits_amount=1,
+                reason=f"Job {job.job_type} completed successfully"
+            )
+            job.credit_applied = True
+        except InsufficientCreditsError as e:
+            # Log the error but don't fail the job completion
+            # The job is already done, we just can't charge for it
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(
+                f"Job {job_id} completed but couldn't deduct credit: {str(e)}"
+            )
+    else:
+        # Job failed or had errors - no credit deduction
+        job.credit_applied = False
+
+    db.commit()
 
     # Store cost summary
     cost_summary = JobCostSummary(
@@ -316,12 +404,23 @@ async def complete_job(
         {
             "call_id": str(call.call_id),
             "purpose": call.purpose,
+            "model_group": call.model_group_used,
             "tokens": call.total_tokens,
             "latency_ms": call.latency_ms,
             "error": call.error
         }
         for call in calls
     ]
+
+    # Get updated credit balance
+    from .models.credits import TeamCredits
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == job.team_id
+    ).first()
+
+    # Add credit information to costs
+    costs["credit_applied"] = job.credit_applied
+    costs["credits_remaining"] = team_credits.credits_remaining if team_credits else None
 
     return JobCompleteResponse(
         job_id=str(job.job_id),

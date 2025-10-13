@@ -2,16 +2,31 @@
 Database models for job-based cost tracking
 """
 from sqlalchemy import (
-    Column, String, Integer, Numeric, DateTime, JSON, Enum,
-    ForeignKey, Index, func
+    Column, String, Integer, Numeric, DateTime, JSON, Enum, Boolean,
+    ForeignKey, Index, func, ARRAY
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.orm import Session, sessionmaker
 import uuid
 import enum
 from datetime import datetime
 
 Base = declarative_base()
+
+
+# Database session management
+def get_db():
+    """Dependency for database session (to be configured with actual engine)"""
+    from ..config.settings import settings
+    from sqlalchemy import create_engine
+    engine = create_engine(settings.database_url)
+    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 class JobStatus(str, enum.Enum):
@@ -46,6 +61,12 @@ class Job(Base):
     # Error tracking
     error_message = Column(String(1000), nullable=True)
 
+    # New fields for multi-tenant and credit tracking
+    organization_id = Column(String(255), nullable=True, index=True)
+    external_task_id = Column(String(255), nullable=True, index=True)  # Your SaaS app's task ID
+    credit_applied = Column(Boolean, default=False)
+    model_groups_used = Column(ARRAY(String), default=list)  # Array of model group names used
+
     __table_args__ = (
         Index('idx_team_created', 'team_id', 'created_at'),
         Index('idx_team_status', 'team_id', 'status'),
@@ -63,7 +84,11 @@ class Job(Base):
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "metadata": self.job_metadata,
-            "error_message": self.error_message
+            "error_message": self.error_message,
+            "organization_id": self.organization_id,
+            "external_task_id": self.external_task_id,
+            "credit_applied": self.credit_applied,
+            "model_groups_used": self.model_groups_used or []
         }
 
 
@@ -103,6 +128,10 @@ class LLMCall(Base):
     # Error tracking
     error = Column(String(1000), nullable=True)
 
+    # New fields for model group tracking
+    model_group_used = Column(String(100), nullable=True, index=True)  # e.g., "ResumeAgent"
+    resolved_model = Column(String(200), nullable=True)  # Actual model after resolution
+
     __table_args__ = (
         Index('idx_job_created', 'job_id', 'created_at'),
     )
@@ -119,7 +148,9 @@ class LLMCall(Base):
             "latency_ms": self.latency_ms,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "purpose": self.purpose,
-            "error": self.error
+            "error": self.error,
+            "model_group_used": self.model_group_used,
+            "resolved_model": self.resolved_model
         }
 
 
