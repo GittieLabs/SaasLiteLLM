@@ -1,11 +1,24 @@
-# Railway Config for LiteLLM Proxy Service
-# This is the default railway.toml for the main service
+# Railway Configuration for SaasLiteLLM Project
+# This file configures both LiteLLM Proxy and SaaS API services
 
+# Default configuration (will be used by services that don't have specific config)
 [build]
 builder = "dockerfile"
 
 [deploy]
-startCommand = "--config /app/config.yaml --port 4000 --detailed_debug"
-healthcheckPath = "/health"
 healthcheckTimeout = 100
 restartPolicyType = "on_failure"
+
+# Service-specific configurations
+# Railway will match these by service name
+
+# LiteLLM Proxy Service
+[environments.production.services.SaasLiteLLM]
+build.dockerfilePath = "Dockerfile"
+deploy.startCommand = "--config /app/config.yaml --port 4000 --detailed_debug"
+deploy.healthcheckPath = "/health"
+
+# SaaS API Service
+[environments.production.services.saas-api]
+build.dockerfilePath = "Dockerfile.saas"
+deploy.healthcheckPath = "/health"
