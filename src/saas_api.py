@@ -39,6 +39,16 @@ engine = create_engine(settings.database_url)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+@app.on_event("startup")
+async def startup_event():
+    """Ensure database tables exist on startup"""
+    # Import all models to ensure they're registered with Base
+    from .models import organizations, model_groups, credits
+
+    # Create all tables if they don't exist
+    Base.metadata.create_all(bind=engine)
+
+
 def get_db():
     """Dependency for database session"""
     db = SessionLocal()
