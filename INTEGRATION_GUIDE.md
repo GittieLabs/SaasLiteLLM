@@ -39,14 +39,14 @@ Your SaaS App → SaaS API → LiteLLM Proxy → LLM Providers
 ### Base URL
 
 ```
-Production: https://saas-api-production-5b42.up.railway.app
+Production: https://llm-saas.usegittie.com
 ```
 
 ### 1. Set Up Organization & Team
 
 ```bash
 # Create organization
-curl -X POST https://saas-api-production-5b42.up.railway.app/api/organizations/create \
+curl -X POST https://llm-saas.usegittie.com/api/organizations/create \
   -H "Content-Type: application/json" \
   -d '{
     "organization_id": "org_your_company",
@@ -55,7 +55,7 @@ curl -X POST https://saas-api-production-5b42.up.railway.app/api/organizations/c
   }'
 
 # Create model groups
-curl -X POST https://saas-api-production-5b42.up.railway.app/api/model-groups/create \
+curl -X POST https://llm-saas.usegittie.com/api/model-groups/create \
   -H "Content-Type: application/json" \
   -d '{
     "group_name": "ChatAgent",
@@ -68,7 +68,7 @@ curl -X POST https://saas-api-production-5b42.up.railway.app/api/model-groups/cr
   }'
 
 # Create team with credits
-curl -X POST https://saas-api-production-5b42.up.railway.app/api/teams/create \
+curl -X POST https://llm-saas.usegittie.com/api/teams/create \
   -H "Content-Type: application/json" \
   -d '{
     "organization_id": "org_your_company",
@@ -84,7 +84,7 @@ curl -X POST https://saas-api-production-5b42.up.railway.app/api/teams/create \
 
 ```bash
 # Create a job
-JOB_ID=$(curl -s -X POST https://saas-api-production-5b42.up.railway.app/api/jobs/create \
+JOB_ID=$(curl -s -X POST https://llm-saas.usegittie.com/api/jobs/create \
   -H "Content-Type: application/json" \
   -d '{
     "team_id": "team_engineering",
@@ -94,7 +94,7 @@ JOB_ID=$(curl -s -X POST https://saas-api-production-5b42.up.railway.app/api/job
   }' | jq -r '.job_id')
 
 # Make LLM call
-curl -X POST "https://saas-api-production-5b42.up.railway.app/api/jobs/$JOB_ID/llm-call" \
+curl -X POST "https://llm-saas.usegittie.com/api/jobs/$JOB_ID/llm-call" \
   -H "Content-Type: application/json" \
   -d '{
     "model_group": "ChatAgent",
@@ -105,7 +105,7 @@ curl -X POST "https://saas-api-production-5b42.up.railway.app/api/jobs/$JOB_ID/l
   }'
 
 # Complete job (deducts credit)
-curl -X POST "https://saas-api-production-5b42.up.railway.app/api/jobs/$JOB_ID/complete" \
+curl -X POST "https://llm-saas.usegittie.com/api/jobs/$JOB_ID/complete" \
   -H "Content-Type: application/json" \
   -d '{
     "status": "completed",
@@ -666,7 +666,7 @@ class SaasLLMClient:
 
 # Usage
 client = SaasLLMClient(
-    base_url="https://saas-api-production-5b42.up.railway.app",
+    base_url="https://llm-saas.usegittie.com",
     team_id="team_engineering"
 )
 
@@ -784,7 +784,7 @@ class SaasLLMClient {
 
 // Usage
 const client = new SaasLLMClient(
-  'https://saas-api-production-5b42.up.railway.app',
+  'https://llm-saas.usegittie.com',
   'team_engineering'
 );
 
@@ -983,7 +983,7 @@ def llm_call_with_retry(client, job_id, model_group, messages, max_retries=3):
 
 ```bash
 # Get current month usage
-curl "https://saas-api-production-5b42.up.railway.app/api/teams/team_engineering/usage?period=2025-10"
+curl "https://llm-saas.usegittie.com/api/teams/team_engineering/usage?period=2025-10"
 ```
 
 **Response:**
@@ -1015,7 +1015,7 @@ curl "https://saas-api-production-5b42.up.railway.app/api/teams/team_engineering
 ### Track Credit Transactions
 
 ```bash
-curl "https://saas-api-production-5b42.up.railway.app/api/credits/teams/team_engineering/transactions?limit=10"
+curl "https://llm-saas.usegittie.com/api/credits/teams/team_engineering/transactions?limit=10"
 ```
 
 ---
