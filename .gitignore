@@ -147,6 +147,11 @@ venv.bak/
 # mkdocs documentation
 /site
 
+# Next.js (admin-panel)
+admin-panel/.next/
+admin-panel/out/
+admin-panel/node_modules/
+
 # mypy
 .mypy_cache/
 .dmypy.json

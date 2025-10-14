@@ -1,0 +1,40 @@
+/* Custom styles for SaaS LiteLLM documentation */
+
+/* Code blocks */
+.md-typeset code {
+    font-size: 0.85em;
+}
+
+/* Admonitions */
+.md-typeset .admonition {
+    border-radius: 0.2rem;
+}
+
+/* Navigation */
+.md-tabs {
+    background-color: var(--md-primary-fg-color);
+}
+
+/* Tables */
+.md-typeset table:not([class]) {
+    display: table;
+    width: 100%;
+}
+
+/* Custom styling for API endpoint documentation */
+.endpoint {
+    padding: 0.5rem;
+    background: var(--md-code-bg-color);
+    border-radius: 0.2rem;
+    font-family: var(--md-code-font-family);
+}
+
+.endpoint .method {
+    font-weight: bold;
+    margin-right: 0.5rem;
+}
+
+.endpoint .method.get { color: #61affe; }
+.endpoint .method.post { color: #49cc90; }
+.endpoint .method.put { color: #fca130; }
+.endpoint .method.delete { color: #f93e3e; }

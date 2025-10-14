@@ -1,0 +1,14 @@
+# MkDocs Documentation Dependencies
+
+# Core MkDocs
+mkdocs>=1.5.0
+
+# Material Theme
+mkdocs-material>=9.5.0
+
+# Extensions
+pymdown-extensions>=10.7.0
+
+# Optional but recommended
+mkdocs-minify-plugin>=0.8.0  # Minify HTML for production
+mkdocs-redirects>=1.2.0       # Handle URL redirects
