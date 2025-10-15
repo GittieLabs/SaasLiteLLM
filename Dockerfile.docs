@@ -1,0 +1,25 @@
+# Dockerfile for MkDocs documentation deployment
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install MkDocs and dependencies
+COPY requirements-docs.txt ./
+RUN pip install --no-cache-dir -r requirements-docs.txt
+
+# Copy documentation source
+COPY docs/ ./docs/
+COPY mkdocs.yml ./
+COPY start_docs.sh ./
+
+# Make start script executable
+RUN chmod +x start_docs.sh
+
+# Build the documentation
+RUN mkdocs build
+
+# Expose port (Railway will override with PORT env var)
+EXPOSE 8004
+
+# Run the server
+CMD ["./start_docs.sh"]
