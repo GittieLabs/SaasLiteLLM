@@ -29,36 +29,11 @@ export default function TeamsPage() {
   const loadTeams = async () => {
     try {
       setLoading(true);
-      // Mock data for demo - replace with actual API call
-      const mockTeams: Team[] = [
-        {
-          team_id: 'team_1',
-          organization_id: '1',
-          team_alias: 'Engineering',
-          virtual_key: 'sk-eng-xxx...xxx',
-          model_groups: ['gpt-4', 'claude-3'],
-          credits: {
-            credits_allocated: 5000,
-            credits_used: 2300,
-            credits_remaining: 2700,
-          },
-        },
-        {
-          team_id: 'team_2',
-          organization_id: '1',
-          team_alias: 'Marketing',
-          virtual_key: 'sk-mkt-xxx...xxx',
-          model_groups: ['gpt-3.5'],
-          credits: {
-            credits_allocated: 2000,
-            credits_used: 800,
-            credits_remaining: 1200,
-          },
-        },
-      ];
-      setTeams(mockTeams);
+      const teams = await api.getTeams();
+      setTeams(teams);
     } catch (error) {
       console.error('Failed to load teams:', error);
+      setTeams([]); // Show empty list on error
     } finally {
       setLoading(false);
     }

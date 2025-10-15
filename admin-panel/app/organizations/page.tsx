@@ -28,26 +28,11 @@ export default function OrganizationsPage() {
   const loadOrganizations = async () => {
     try {
       setLoading(true);
-      // Mock data for demo - replace with actual API call
-      const mockOrgs: Organization[] = [
-        {
-          organization_id: '1',
-          name: 'Acme Corporation',
-          status: 'active',
-          created_at: '2024-01-15T10:00:00Z',
-          updated_at: '2024-01-15T10:00:00Z',
-        },
-        {
-          organization_id: '2',
-          name: 'TechStart Inc',
-          status: 'active',
-          created_at: '2024-02-20T14:30:00Z',
-          updated_at: '2024-02-20T14:30:00Z',
-        },
-      ];
-      setOrganizations(mockOrgs);
+      const orgs = await api.getOrganizations();
+      setOrganizations(orgs);
     } catch (error) {
       console.error('Failed to load organizations:', error);
+      setOrganizations([]); // Show empty list on error
     } finally {
       setLoading(false);
     }

@@ -29,45 +29,11 @@ export default function ModelGroupsPage() {
   const loadModelGroups = async () => {
     try {
       setLoading(true);
-      // Mock data for demo - replace with actual API call
-      const mockGroups: ModelGroup[] = [
-        {
-          model_group_id: 'mg_1',
-          group_name: 'gpt-4-group',
-          display_name: 'GPT-4 Models',
-          description: 'High-performance GPT-4 models',
-          status: 'active',
-          models: [
-            { model_name: 'gpt-4', priority: 1 },
-            { model_name: 'gpt-4-turbo', priority: 2 },
-          ],
-        },
-        {
-          model_group_id: 'mg_2',
-          group_name: 'claude-3-group',
-          display_name: 'Claude 3 Models',
-          description: 'Anthropic Claude 3 family',
-          status: 'active',
-          models: [
-            { model_name: 'claude-3-opus', priority: 1 },
-            { model_name: 'claude-3-sonnet', priority: 2 },
-          ],
-        },
-        {
-          model_group_id: 'mg_3',
-          group_name: 'budget-group',
-          display_name: 'Budget Models',
-          description: 'Cost-effective models',
-          status: 'active',
-          models: [
-            { model_name: 'gpt-3.5-turbo', priority: 1 },
-            { model_name: 'claude-instant', priority: 2 },
-          ],
-        },
-      ];
-      setModelGroups(mockGroups);
+      const groups = await api.getModelGroups();
+      setModelGroups(groups);
     } catch (error) {
       console.error('Failed to load model groups:', error);
+      setModelGroups([]); // Show empty list on error
     } finally {
       setLoading(false);
     }
