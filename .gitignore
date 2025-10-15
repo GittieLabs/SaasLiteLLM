@@ -150,6 +150,7 @@ venv.bak/
 admin-panel/.next/
 admin-panel/out/
 admin-panel/node_modules/
+!admin-panel/lib/
 
 # mypy
 .mypy_cache/
