@@ -1,0 +1,198 @@
+site_name: SaaS LiteLLM API Documentation
+site_description: Production-ready LiteLLM deployment with job-based cost tracking for multi-tenant SaaS applications
+site_author: SaaS LiteLLM Team
+
+# Repository - Commented out for private repo
+# repo_name: gittielabs/SaasLiteLLM
+# repo_url: https://github.com/gittielabs/SaasLiteLLM
+# edit_uri: edit/main/docs/
+
+# Copyright
+copyright: Copyright &copy; 2024 Gittielabs, LLC. SaasLiteLLM is a product of Gittielabs, LLC.
+
+# Theme
+theme:
+  name: material
+  palette:
+    # Light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    # Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: deep purple
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+
+  font:
+    text: Roboto
+    code: Roboto Mono
+
+  features:
+    - navigation.instant      # Instant loading
+    - navigation.tracking     # URL tracking
+    - navigation.tabs         # Top-level tabs
+    - navigation.tabs.sticky  # Sticky tabs
+    - navigation.sections     # Section headers
+    - navigation.expand       # Expand by default
+    - navigation.top          # Back to top button
+    - navigation.footer       # Footer navigation
+    - search.suggest          # Search suggestions
+    - search.highlight        # Highlight search terms
+    - search.share            # Share search results
+    - toc.follow              # TOC follows scroll
+    - content.code.copy       # Copy code button
+    - content.code.annotate   # Code annotations
+    - content.tabs.link       # Link code tabs
+
+  icon:
+    repo: fontawesome/brands/github
+    logo: material/api
+
+# Plugins
+plugins:
+  - search:
+      lang: en
+      separator: '[\s\-\.]+'
+  - minify:
+      minify_html: true
+      minify_js: true
+      minify_css: true
+      htmlmin_opts:
+        remove_comments: true
+
+# Extensions
+markdown_extensions:
+  # Python Markdown
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+
+  # Python Markdown Extensions
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.betterem:
+      smart_enable: all
+  - pymdownx.caret
+  - pymdownx.details
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.smartsymbols
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.tilde
+
+# Extra
+extra:
+  # social:
+  #   - icon: fontawesome/brands/github
+  #     link: https://github.com/gittielabs/SaasLiteLLM
+  #     name: GitHub Repository
+
+  version:
+    provider: mike
+    default: latest
+
+# Extra CSS
+extra_css:
+  - stylesheets/extra.css
+
+# Extra JavaScript
+extra_javascript:
+  - javascripts/extra.js
+
+# Navigation
+nav:
+  - Home: index.md
+
+  - Getting Started:
+      - Introduction: getting-started/introduction.md
+      - Quickstart: getting-started/quickstart.md
+      - Installation: getting-started/installation.md
+      - Architecture: getting-started/architecture.md
+
+  - Admin Dashboard:
+      - Overview: admin-dashboard/overview.md
+      - Organizations: admin-dashboard/organizations.md
+      - Teams: admin-dashboard/teams.md
+      - Model Access Groups: admin-dashboard/model-access-groups.md
+      - Model Aliases: admin-dashboard/model-aliases.md
+      - Credits: admin-dashboard/credits.md
+      - Suspend & Pause: admin-dashboard/suspend-pause.md
+      - Monitoring: admin-dashboard/monitoring.md
+
+  - Integration:
+      - Overview: integration/overview.md
+      - Authentication: integration/authentication.md
+      - Job Workflow: integration/job-workflow.md
+      - Non-Streaming: integration/non-streaming.md
+      - Streaming: integration/streaming.md
+      - Typed Client: integration/typed-client.md
+      - Structured Outputs: integration/structured-outputs.md
+      - Error Handling: integration/error-handling.md
+      - Best Practices: integration/best-practices.md
+
+  - Downloads:
+      - Typed Client: downloads/typed-client.md
+
+  - Examples:
+      - Basic Usage: examples/basic-usage.md
+      - Streaming: examples/streaming-examples.md
+      - Structured Outputs: examples/structured-outputs.md
+      - Full Chain: examples/full-chain.md
+      - Agent Integration: examples/agent-integration.md
+
+  - API Reference:
+      - Overview: api-reference/overview.md
+      - Jobs: api-reference/jobs.md
+      - LLM Calls: api-reference/llm-calls.md
+      - Teams: api-reference/teams.md
+      - Organizations: api-reference/organizations.md
+      - Full API Docs (ReDoc): api-reference/redoc-link.md
+
+  - Deployment:
+      - Local Development: deployment/local-development.md
+      - Railway: deployment/railway.md
+      - Environment Variables: deployment/environment-variables.md
+      - Docker: deployment/docker.md
+
+  - Testing:
+      - Overview: testing/overview.md
+      - Integration Tests: testing/integration-tests.md
+      - Troubleshooting: testing/troubleshooting.md
+
+  - Reference:
+      - Database Schema: reference/database-schema.md
+      - Credit System: reference/credit-system.md
+      - Model Resolution: reference/model-resolution.md
+      - Streaming Architecture: reference/streaming-architecture.md
