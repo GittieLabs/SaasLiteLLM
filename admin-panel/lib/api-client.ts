@@ -1,19 +1,23 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
 
-// Get admin API key from localStorage (set during login)
-function getAdminKey(): string | null {
+// Get authentication token from localStorage
+function getAuthToken(): string | null {
   if (typeof window === 'undefined') return null;
+  // Prefer JWT token (new auth system)
+  const jwtToken = localStorage.getItem('jwtToken');
+  if (jwtToken) return jwtToken;
+  // Fallback to legacy admin key for backward compatibility
   return localStorage.getItem('adminKey');
 }
 
 async function request(endpoint: string, options: RequestInit = {}) {
-  const adminKey = getAdminKey();
+  const authToken = getAuthToken();
 
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
-      ...(adminKey ? { 'X-Admin-Key': adminKey } : {}),
+      ...(authToken ? { 'Authorization': `Bearer ${authToken}` } : {}),
       ...options.headers,
     },
   });
@@ -21,8 +25,9 @@ async function request(endpoint: string, options: RequestInit = {}) {
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
 
-    // If unauthorized, clear stored key and redirect to login
+    // If unauthorized, clear stored credentials and redirect to login
     if (response.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('jwtToken');
       localStorage.removeItem('adminKey');
       localStorage.removeItem('user');
       window.location.href = '/login';
@@ -110,4 +115,23 @@ export const api = {
 
   // Credits
   getCredits: (teamId: string) => request(`/api/credits/teams/${teamId}/balance`),
+
+  // Admin Users
+  getAdminUsers: () => request('/api/admin-users'),
+  getAdminUser: (userId: string) => request(`/api/admin-users/${userId}`),
+  createAdminUser: (data: any) => request('/api/admin-users', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  updateAdminUser: (userId: string, data: any) => request(`/api/admin-users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  deleteAdminUser: (userId: string) => request(`/api/admin-users/${userId}`, {
+    method: 'DELETE',
+  }),
+  getAuditLogs: (params?: any) => {
+    const queryParams = new URLSearchParams(params).toString();
+    return request(`/api/admin-users/audit-logs${queryParams ? `?${queryParams}` : ''}`);
+  },
 };

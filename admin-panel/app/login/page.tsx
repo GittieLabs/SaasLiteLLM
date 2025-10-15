@@ -1,18 +1,38 @@
 'use client';
 
-import { useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { login } from '@/lib/auth';
+import { needsSetup, setupOwner, loginWithPassword } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 
 export default function LoginPage() {
   const router = useRouter();
-  const [adminKey, setAdminKey] = useState('');
-  const [error, setError] = useState('');
+  const [isSetupMode, setIsSetupMode] = useState(false);
+  const [isCheckingSetup, setIsCheckingSetup] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  // Login form state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+
+  // Setup form state (additional field)
+  const [displayName, setDisplayName] = useState('');
+
+  // Check if setup is needed on mount
+  useEffect(() => {
+    const checkSetup = async () => {
+      setIsCheckingSetup(true);
+      const setupRequired = await needsSetup();
+      setIsSetupMode(setupRequired);
+      setIsCheckingSetup(false);
+    };
+    checkSetup();
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -20,11 +40,22 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const user = await login(adminKey);
-      if (user) {
-        router.push('/');
+      if (isSetupMode) {
+        // Setup mode - create first owner
+        const result = await setupOwner(email, password, displayName);
+        if (result) {
+          router.push('/');
+        } else {
+          setError('Setup failed. Please try again.');
+        }
       } else {
-        setError('Invalid admin key. Please check your MASTER_KEY.');
+        // Login mode - authenticate with email/password
+        const result = await loginWithPassword(email, password);
+        if (result) {
+          router.push('/');
+        } else {
+          setError('Invalid email or password.');
+        }
       }
     } catch (err) {
       setError('Authentication failed. Please try again.');
@@ -33,47 +64,100 @@ export default function LoginPage() {
     }
   };
 
+  if (isCheckingSetup) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <p className="text-center text-muted-foreground">Loading...</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
       <Card className="w-full max-w-md">
         <CardHeader>
-          <CardTitle>Admin Login</CardTitle>
-          <CardDescription>Enter your admin master key to access the SaaS API Admin Panel</CardDescription>
+          <CardTitle>
+            {isSetupMode ? 'Admin Setup' : 'Admin Login'}
+          </CardTitle>
+          <CardDescription>
+            {isSetupMode
+              ? 'Create your admin account to get started'
+              : 'Sign in to access the SaaS API Admin Panel'}
+          </CardDescription>
         </CardHeader>
         <CardContent>
+          {isSetupMode && (
+            <Alert className="mb-4">
+              <AlertDescription>
+                This is the first-time setup. You will be created as the owner with full access.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
+            {isSetupMode && (
+              <div className="space-y-2">
+                <Label htmlFor="displayName">Display Name</Label>
+                <Input
+                  id="displayName"
+                  type="text"
+                  placeholder="John Doe"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  required
+                  disabled={isLoading}
+                />
+              </div>
+            )}
+
             <div className="space-y-2">
-              <Label htmlFor="adminKey">Admin Master Key</Label>
+              <Label htmlFor="email">Email</Label>
               <Input
-                id="adminKey"
-                type="password"
-                placeholder="sk-admin-..."
-                value={adminKey}
-                onChange={(e) => setAdminKey(e.target.value)}
+                id="email"
+                type="email"
+                placeholder="admin@example.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={isLoading}
               />
-              <p className="text-xs text-muted-foreground">
-                This is the MASTER_KEY value from your .env file
-              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                placeholder={isSetupMode ? 'Create a strong password' : 'Enter your password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                disabled={isLoading}
+                minLength={8}
+              />
+              {isSetupMode && (
+                <p className="text-xs text-muted-foreground">
+                  Password must be at least 8 characters
+                </p>
+              )}
             </div>
 
             {error && (
-              <div className="text-sm text-destructive">{error}</div>
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
             )}
 
             <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? 'Authenticating...' : 'Sign In'}
+              {isLoading
+                ? (isSetupMode ? 'Setting up...' : 'Signing in...')
+                : (isSetupMode ? 'Create Admin Account' : 'Sign In')}
             </Button>
           </form>
-
-          {process.env.NODE_ENV === 'development' && (
-            <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-              <p className="font-medium">Development Default:</p>
-              <p className="font-mono text-xs break-all">sk-admin-local-dev-change-in-production</p>
-              <p className="text-xs">Change this in production! See SECURITY.md</p>
-            </div>
-          )}
         </CardContent>
       </Card>
     </div>

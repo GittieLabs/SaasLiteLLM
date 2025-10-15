@@ -158,18 +158,14 @@ async def get_current_user(
     return user
 
 
-async def require_role(
-    required_roles: List[str],
-    current_user: AdminUser = Depends(get_current_user)
-) -> AdminUser:
+def require_owner_or_admin(current_user: AdminUser = Depends(get_current_user)) -> AdminUser:
     """
-    Dependency to check if user has required role.
-    Role hierarchy: owner > admin > user
+    Dependency to require owner or admin role.
     """
-    if current_user.role not in required_roles:
+    if current_user.role not in ["owner", "admin"]:
         raise HTTPException(
             status_code=403,
-            detail=f"Insufficient permissions. Required roles: {', '.join(required_roles)}"
+            detail="Insufficient permissions. Required roles: owner, admin"
         )
     return current_user
 
@@ -198,18 +194,32 @@ async def log_audit(
 
 # Endpoints
 
+@router.get("/setup/status")
+async def check_setup_status(db: Session = Depends(get_db)):
+    """
+    Check if initial setup is required.
+
+    Public endpoint - no authentication required.
+    Returns whether an owner account needs to be created.
+    """
+    user_count = db.query(AdminUser).count()
+    return {
+        "needs_setup": user_count == 0,
+        "has_users": user_count > 0
+    }
+
+
 @router.post("/setup", response_model=LoginResponse)
 async def setup_owner_account(
     request: SetupRequest,
     req: Request,
-    db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    db: Session = Depends(get_db)
 ):
     """
-    First-time setup: Create owner account using MASTER_KEY.
+    First-time setup: Create owner account.
 
     This endpoint is only available when no users exist yet.
-    Requires: X-Admin-Key header with MASTER_KEY
+    No authentication required for first-time setup.
 
     The created owner account can then be used to login with email/password.
     """
@@ -399,7 +409,7 @@ async def get_current_user_info(
 @router.get("", response_model=List[UserResponse])
 async def list_users(
     db: Session = Depends(get_db),
-    current_user: AdminUser = Depends(lambda u=Depends(get_current_user): require_role(["owner", "admin"], u))
+    current_user: AdminUser = Depends(require_owner_or_admin)
 ):
     """
     List all admin users.
@@ -415,7 +425,7 @@ async def create_user(
     request: UserCreateRequest,
     req: Request,
     db: Session = Depends(get_db),
-    current_user: AdminUser = Depends(lambda u=Depends(get_current_user): require_role(["owner", "admin"], u))
+    current_user: AdminUser = Depends(require_owner_or_admin)
 ):
     """
     Create a new admin user.
@@ -474,7 +484,7 @@ async def update_user(
     request: UserUpdateRequest,
     req: Request,
     db: Session = Depends(get_db),
-    current_user: AdminUser = Depends(lambda u=Depends(get_current_user): require_role(["owner", "admin"], u))
+    current_user: AdminUser = Depends(require_owner_or_admin)
 ):
     """
     Update an admin user.
@@ -541,7 +551,7 @@ async def delete_user(
     user_id: str,
     req: Request,
     db: Session = Depends(get_db),
-    current_user: AdminUser = Depends(lambda u=Depends(get_current_user): require_role(["owner", "admin"], u))
+    current_user: AdminUser = Depends(require_owner_or_admin)
 ):
     """
     Delete (deactivate) an admin user.
@@ -634,7 +644,7 @@ async def get_audit_logs(
     user_id: Optional[str] = None,
     resource_type: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: AdminUser = Depends(lambda u=Depends(get_current_user): require_role(["owner", "admin"], u))
+    current_user: AdminUser = Depends(require_owner_or_admin)
 ):
     """
     Get audit logs.
