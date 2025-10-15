@@ -3,6 +3,7 @@ SaaS API Wrapper for LiteLLM
 Provides job-based cost tracking abstraction layer
 """
 from fastapi import FastAPI, HTTPException, Depends, Header
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from typing import Optional, List, Dict, Any
@@ -29,6 +30,19 @@ app = FastAPI(
     title="SaaS LLM API",
     description="Job-based LLM API with cost tracking and model group management",
     version="2.0.0"
+)
+
+# Add CORS middleware to allow admin panel to connect
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",  # Admin panel dev server
+        "http://localhost:3002",  # Admin panel alternate port
+        "http://localhost:3001",  # Possible admin panel port
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all HTTP methods
+    allow_headers=["*"],  # Allow all headers (including X-Admin-Key)
 )
 
 # Include new routers
