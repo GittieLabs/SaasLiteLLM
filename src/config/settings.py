@@ -1,17 +1,22 @@
 from pydantic_settings import BaseSettings
 from typing import Optional
 import os
+import logging
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     # Database
     database_url: str
 
     # SaaS API Admin Authentication
-    master_key: str  # Admin API key for SaaS management endpoints
+    # IMPORTANT: Set MASTER_KEY environment variable in production!
+    master_key: str = "sk-admin-default-CHANGE-THIS-IN-PRODUCTION"  # Admin API key for SaaS management endpoints
 
     # LiteLLM
-    litellm_master_key: str
+    # IMPORTANT: Set LITELLM_MASTER_KEY environment variable in production!
+    litellm_master_key: str = "sk-litellm-default-CHANGE-THIS-IN-PRODUCTION"
     litellm_config_path: str = "src/config/litellm_config.yaml"
     litellm_proxy_url: str = "http://localhost:8002"  # Default for local dev
 
@@ -39,3 +44,16 @@ class Settings(BaseSettings):
         case_sensitive = False
 
 settings = Settings()
+
+# Security warning for default keys
+if settings.master_key == "sk-admin-default-CHANGE-THIS-IN-PRODUCTION":
+    if settings.environment == "production":
+        logger.error("⚠️  SECURITY WARNING: Using default MASTER_KEY in production! Set MASTER_KEY environment variable immediately!")
+    else:
+        logger.warning("Using default MASTER_KEY. Set MASTER_KEY environment variable for production.")
+
+if settings.litellm_master_key == "sk-litellm-default-CHANGE-THIS-IN-PRODUCTION":
+    if settings.environment == "production":
+        logger.error("⚠️  SECURITY WARNING: Using default LITELLM_MASTER_KEY in production! Set LITELLM_MASTER_KEY environment variable immediately!")
+    else:
+        logger.warning("Using default LITELLM_MASTER_KEY. Set LITELLM_MASTER_KEY environment variable for production.")
