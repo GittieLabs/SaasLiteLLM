@@ -68,11 +68,13 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-4 space-y-2 text-sm text-muted-foreground">
-            <p>Demo credentials:</p>
-            <p>Admin: username: admin, password: admin123</p>
-            <p>User: username: user, password: user123</p>
-          </div>
+          {process.env.NODE_ENV === 'development' && (
+            <div className="mt-4 space-y-2 text-sm text-muted-foreground">
+              <p>Demo credentials:</p>
+              <p>Admin: username: admin, password: admin123</p>
+              <p>User: username: user, password: user123</p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
