@@ -1,4 +1,5 @@
 # Dockerfile for MkDocs documentation deployment
+# Build context must be repository root
 FROM python:3.11-slim
 
 WORKDIR /app
