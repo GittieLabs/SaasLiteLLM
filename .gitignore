@@ -184,3 +184,11 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+admin-panel/.next/cache/webpack/server-development/index.pack.gz
+admin-panel/.next/cache/webpack/server-development/index.pack.gz
+admin-panel/.next/cache/webpack/server-development/0.pack.gz
+admin-panel/.next/cache/webpack/server-development/index.pack.gz
+admin-panel/.next/cache/webpack/server-development/0.pack.gz
+admin-panel/.next/cache/webpack/client-development/index.pack.gz.old
+admin-panel/.next/cache/webpack/client-development/index.pack.gz
+admin-panel/.next/cache/webpack/client-development/1.pack.gz
