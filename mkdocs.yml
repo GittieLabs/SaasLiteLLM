@@ -153,6 +153,7 @@ nav:
 
   - Integration:
       - Overview: integration/overview.md
+      - Complete Integration Flow: integration-flow.md
       - Authentication: integration/authentication.md
       - Job Workflow: integration/job-workflow.md
       - Non-Streaming: integration/non-streaming.md
@@ -184,6 +185,7 @@ nav:
       - Local Development: deployment/local-development.md
       - Railway: deployment/railway.md
       - Environment Variables: deployment/environment-variables.md
+      - LiteLLM Setup: litellm-setup.md
       - Docker: deployment/docker.md
 
   - Testing:

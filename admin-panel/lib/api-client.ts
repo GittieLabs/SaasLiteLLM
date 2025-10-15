@@ -1,16 +1,33 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8003';
 
+// Get admin API key from localStorage (set during login)
+function getAdminKey(): string | null {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('adminKey');
+}
+
 async function request(endpoint: string, options: RequestInit = {}) {
+  const adminKey = getAdminKey();
+
   const response = await fetch(`${API_URL}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
+      ...(adminKey ? { 'X-Admin-Key': adminKey } : {}),
       ...options.headers,
     },
   });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+
+    // If unauthorized, clear stored key and redirect to login
+    if (response.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('adminKey');
+      localStorage.removeItem('user');
+      window.location.href = '/login';
+    }
+
     throw new Error(error.detail || 'Request failed');
   }
 
