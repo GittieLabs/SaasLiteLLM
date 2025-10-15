@@ -247,15 +247,14 @@ graph TD
 
 ### Environment Variables
 
-Create `.env.local` in the `admin-dashboard/` directory:
+Create `.env.local` in the `admin-panel/` directory:
 
 ```bash
-# SaaS API URL
-NEXT_PUBLIC_API_URL=http://localhost:8003/api
+# SaaS API URL (required)
+NEXT_PUBLIC_API_URL=http://localhost:8003
 
-# Admin authentication (if implemented)
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=your-secure-password
+# Note: MASTER_KEY is entered by users at login,
+# not stored in this file
 ```
 
 ### API Connection
@@ -271,38 +270,35 @@ All API calls are authenticated (implementation depends on your auth strategy).
 
 ### Authentication
 
-**Important:** Implement authentication for the admin dashboard in production!
+The Admin Dashboard uses **MASTER_KEY authentication** to protect administrative endpoints.
 
-Options:
-1. **Basic Auth** - Simple username/password
-2. **OAuth** - Google, GitHub, etc.
-3. **Custom Auth** - Your own auth system
-4. **API Keys** - Admin-specific keys
+**How it works:**
+1. Users enter their MASTER_KEY on the login page
+2. Dashboard validates key by making test request to `/api/model-groups`
+3. Valid key is stored in localStorage
+4. All API requests include `X-Admin-Key` header with the key
 
-Example with Basic Auth:
+**Setting up:**
 
-```javascript
-// middleware.js
-export function middleware(request) {
-  const basicAuth = request.headers.get('authorization');
-
-  if (basicAuth) {
-    const auth = basicAuth.split(' ')[1];
-    const [user, pwd] = atob(auth).split(':');
-
-    if (user === process.env.ADMIN_USERNAME && pwd === process.env.ADMIN_PASSWORD) {
-      return NextResponse.next();
-    }
-  }
-
-  return new Response('Authentication required', {
-    status: 401,
-    headers: {
-      'WWW-Authenticate': 'Basic realm="Secure Area"'
-    }
-  });
-}
+Local Development:
+```bash
+# .env
+MASTER_KEY=sk-admin-local-dev-change-in-production
 ```
+
+Production (Railway):
+```bash
+# Railway Variables
+MASTER_KEY=sk-admin-GENERATE-SECURE-KEY-HERE
+```
+
+**Generate secure keys:**
+```bash
+openssl rand -hex 32
+# Format: sk-admin-<generated-hex>
+```
+
+[:octicons-arrow-right-24: Full Authentication Guide](authentication.md)
 
 ### Network Security
 

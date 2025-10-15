@@ -143,6 +143,7 @@ nav:
 
   - Admin Dashboard:
       - Overview: admin-dashboard/overview.md
+      - Authentication: admin-dashboard/authentication.md
       - Organizations: admin-dashboard/organizations.md
       - Teams: admin-dashboard/teams.md
       - Model Access Groups: admin-dashboard/model-access-groups.md
@@ -154,7 +155,7 @@ nav:
   - Integration:
       - Overview: integration/overview.md
       - Complete Integration Flow: integration-flow.md
-      - Authentication: integration/authentication.md
+      - Team Authentication: integration/authentication.md
       - Job Workflow: integration/job-workflow.md
       - Non-Streaming: integration/non-streaming.md
       - Streaming: integration/streaming.md
@@ -186,6 +187,7 @@ nav:
       - Railway: deployment/railway.md
       - Environment Variables: deployment/environment-variables.md
       - LiteLLM Setup: litellm-setup.md
+      - Integration Flow: integration-flow.md
       - Docker: deployment/docker.md
 
   - Testing:

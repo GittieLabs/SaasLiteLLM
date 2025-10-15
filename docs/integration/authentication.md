@@ -1,15 +1,31 @@
-# Authentication
+# Team Authentication
 
 Learn how to authenticate API requests using virtual keys, best practices for key management, and how to handle authentication errors.
 
+!!! info "Admin vs Team Authentication"
+    This guide covers **team authentication** using virtual keys for making LLM requests.
+
+    For **admin authentication** (managing organizations, teams, models), see [Admin Authentication](../admin-dashboard/authentication.md).
+
 ## Overview
 
-All API endpoints in SaaS LiteLLM require authentication using **virtual keys**. Virtual keys are team-specific API keys that:
+All team API endpoints in SaaS LiteLLM require authentication using **virtual keys**. Virtual keys are team-specific API keys that:
 
 - Authenticate your team with the SaaS API
 - Track usage and costs per team
 - Enforce credit limits and access controls
 - Never expose the underlying LiteLLM infrastructure
+
+## Authentication Types
+
+SaaS LiteLLM uses **two separate authentication systems**:
+
+| Type | Key Format | Header | Used For | Documentation |
+|------|------------|--------|----------|---------------|
+| **Admin** | `MASTER_KEY` | `X-Admin-Key` | Managing organizations, teams, models | [Admin Auth](../admin-dashboard/authentication.md) |
+| **Team** | Virtual Key (per-team) | `Authorization: Bearer` | Making LLM requests | This guide |
+
+**Important**: These are completely separate systems with different keys and purposes!
 
 ## Virtual Keys
 
