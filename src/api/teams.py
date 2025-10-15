@@ -10,6 +10,7 @@ from ..models.credits import TeamCredits
 from ..services.credit_manager import get_credit_manager
 from ..services.litellm_service import get_litellm_service, LiteLLMServiceError
 from ..models.job_tracking import get_db
+from ..auth.dependencies import verify_admin_key
 import logging
 
 logger = logging.getLogger(__name__)
@@ -42,10 +43,13 @@ class TeamResponse(BaseModel):
 @router.post("/create", response_model=TeamResponse)
 async def create_team(
     request: TeamCreateRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    Create a new team with model groups, credits, and LiteLLM integration
+    Create a new team with model groups, credits, and LiteLLM integration.
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     # Verify organization exists
     from ..models.organizations import Organization
@@ -180,10 +184,13 @@ async def create_team(
 @router.get("/{team_id}")
 async def get_team(
     team_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    Get team details
+    Get team details.
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     # Get credits
     credits = db.query(TeamCredits).filter(
@@ -221,10 +228,13 @@ async def get_team(
 async def assign_model_groups(
     team_id: str,
     model_groups: List[str],
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    Assign model groups to a team (replaces existing assignments)
+    Assign model groups to a team (replaces existing assignments).
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     # Verify team exists
     credits = db.query(TeamCredits).filter(

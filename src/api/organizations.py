@@ -7,6 +7,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from ..models.organizations import Organization
 from ..models.job_tracking import Job, get_db
+from ..auth.dependencies import verify_admin_key
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
 
@@ -31,10 +32,13 @@ class OrganizationResponse(BaseModel):
 @router.post("/create", response_model=OrganizationResponse)
 async def create_organization(
     request: OrganizationCreateRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    Create a new organization
+    Create a new organization.
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     # Check if organization already exists
     existing = db.query(Organization).filter(
@@ -64,10 +68,13 @@ async def create_organization(
 @router.get("/{organization_id}", response_model=OrganizationResponse)
 async def get_organization(
     organization_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    Get organization details
+    Get organization details.
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     org = db.query(Organization).filter(
         Organization.organization_id == organization_id
@@ -85,10 +92,13 @@ async def get_organization(
 @router.get("/{organization_id}/teams")
 async def list_organization_teams(
     organization_id: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    List all teams in an organization
+    List all teams in an organization.
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     # Verify organization exists
     org = db.query(Organization).filter(
@@ -119,10 +129,13 @@ async def list_organization_teams(
 async def get_organization_usage(
     organization_id: str,
     period: str,  # e.g., "2025-10"
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    Get organization-wide usage for a period
+    Get organization-wide usage for a period.
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     # Verify organization exists
     org = db.query(Organization).filter(

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import uuid
 from ..models.model_groups import ModelGroup, ModelGroupModel, TeamModelGroup
 from ..models.job_tracking import get_db
-from ..auth.dependencies import verify_virtual_key
+from ..auth.dependencies import verify_virtual_key, verify_admin_key
 
 router = APIRouter(prefix="/api/model-groups", tags=["model-groups"])
 
@@ -39,10 +39,13 @@ class ModelGroupResponse(BaseModel):
 @router.post("/create", response_model=ModelGroupResponse)
 async def create_model_group(
     request: ModelGroupCreateRequest,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    Create a new model group (e.g., ResumeAgent, ParsingAgent)
+    Create a new model group (e.g., ResumeAgent, ParsingAgent).
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     # Check if group name already exists
     existing = db.query(ModelGroup).filter(
@@ -143,10 +146,13 @@ async def get_model_group(
 async def update_model_group_models(
     group_name: str,
     models: List[ModelConfig],
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    Update models in a model group (replaces all existing models)
+    Update models in a model group (replaces all existing models).
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     group = db.query(ModelGroup).filter(
         ModelGroup.group_name == group_name
@@ -184,10 +190,13 @@ async def update_model_group_models(
 @router.delete("/{group_name}")
 async def delete_model_group(
     group_name: str,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _: None = Depends(verify_admin_key)
 ):
     """
-    Delete a model group
+    Delete a model group.
+
+    Requires: X-Admin-Key header with MASTER_KEY
     """
     group = db.query(ModelGroup).filter(
         ModelGroup.group_name == group_name

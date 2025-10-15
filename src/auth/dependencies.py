@@ -6,6 +6,37 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from ..models.credits import TeamCredits
 from ..models.job_tracking import get_db
+from ..config.settings import settings
+
+
+async def verify_admin_key(
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
+) -> None:
+    """
+    Verify admin API key for management endpoints.
+
+    Expects X-Admin-Key header with the MASTER_KEY from settings.
+
+    This protects administrative endpoints like:
+    - Organization creation/management
+    - Team creation/management
+    - Model group configuration
+    - Credit allocation
+
+    Raises:
+        HTTPException: 401 if key is missing or invalid
+    """
+    if not x_admin_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Missing X-Admin-Key header. Admin authentication required."
+        )
+
+    if x_admin_key != settings.master_key:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid admin API key"
+        )
 
 
 async def verify_virtual_key(
