@@ -2,10 +2,10 @@ site_name: SaaS LiteLLM API Documentation
 site_description: Production-ready LiteLLM deployment with job-based cost tracking for multi-tenant SaaS applications
 site_author: SaaS LiteLLM Team
 
-# Repository - Commented out for private repo
-# repo_name: gittielabs/SaasLiteLLM
-# repo_url: https://github.com/gittielabs/SaasLiteLLM
-# edit_uri: edit/main/docs/
+# Repository
+repo_name: GittieLabs/SaasLiteLLM
+repo_url: https://github.com/GittieLabs/SaasLiteLLM
+edit_uri: edit/main/docs/
 
 # Copyright
 copyright: Copyright &copy; 2024 Gittielabs, LLC. SaasLiteLLM is a product of Gittielabs, LLC.
@@ -114,10 +114,10 @@ markdown_extensions:
 
 # Extra
 extra:
-  # social:
-  #   - icon: fontawesome/brands/github
-  #     link: https://github.com/gittielabs/SaasLiteLLM
-  #     name: GitHub Repository
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/GittieLabs/SaasLiteLLM
+      name: GitHub Repository
 
   version:
     provider: mike

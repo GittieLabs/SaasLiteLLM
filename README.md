@@ -1,6 +1,12 @@
-# LiteLLM SaaS Platform
+# SaaS LiteLLM
 
-A production-ready LiteLLM deployment with **job-based cost tracking** for multi-tenant SaaS applications. Build your LLM-powered SaaS without exposing infrastructure complexity to your customers.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![GitHub release](https://img.shields.io/github/v/release/GittieLabs/SaasLiteLLM)](https://github.com/GittieLabs/SaasLiteLLM/releases)
+[![Documentation](https://img.shields.io/badge/docs-github%20pages-blue)](https://gittielabs.github.io/SaasLiteLLM/)
+
+A production-ready multi-tenant SaaS wrapper for [LiteLLM](https://github.com/BerriAI/litellm) with **job-based cost tracking**. Build your LLM-powered SaaS without exposing infrastructure complexity to your customers.
+
+> **Built on [LiteLLM](https://github.com/BerriAI/litellm)** - The unified interface to 100+ LLM providers (OpenAI, Anthropic, Azure, Google, AWS, and more).
 
 ## Key Features
 
@@ -79,37 +85,21 @@ python scripts/start_local.py
 python scripts/start_saas_api.py
 ```
 
-> **📖 For detailed setup instructions, see [QUICKSTART.md](QUICKSTART.md)**
-
 **Services:**
 - **LiteLLM Backend**: http://localhost:8002 (internal, admin only)
 - **SaaS API**: http://localhost:8003 (expose this to your teams)
 - **API Documentation**: http://localhost:8003/docs
 
-> **Note**: Local dev uses ports 8002/8003 to avoid conflicts. Production uses standard 8000.
-> See [PORT_CONFIG.md](PORT_CONFIG.md) for details.
+## Documentation
 
-See [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) for detailed examples.
+For comprehensive guides, deployment instructions, and API references:
 
-### Railway Deployment
+**[📖 Full Documentation](https://gittielabs.github.io/SaasLiteLLM/)**
 
-**📦 Pre-built Docker Images (Recommended)**
-
-We build Docker images automatically via GitHub Actions and push to GitHub Container Registry. This is the fastest and most reliable deployment method:
-
-1. **Push to main branch** - GitHub Actions automatically builds images
-2. **Make images public** - Required for Railway to pull them
-3. **Deploy from GHCR**:
-   - LiteLLM: `ghcr.io/gittielabs/saaslitellm/litellm-proxy:latest`
-   - SaaS API: `ghcr.io/gittielabs/saaslitellm/saas-api:latest`
-
-> **📖 See [RAILWAY_GHCR_DEPLOYMENT.md](RAILWAY_GHCR_DEPLOYMENT.md) for complete step-by-step instructions**
-
-**Alternative: Build from Source**
-
-If you prefer Railway to build from source:
-
-> **📖 See [RAILWAY_DEPLOYMENT.md](RAILWAY_DEPLOYMENT.md) or [RAILWAY_CONFIG_GUIDE.md](RAILWAY_CONFIG_GUIDE.md)**
+- **[Getting Started](https://gittielabs.github.io/SaasLiteLLM/getting-started/introduction/)** - Introduction and concepts
+- **[Deployment](https://gittielabs.github.io/SaasLiteLLM/deployment/local-development/)** - Local development and Railway deployment
+- **[API Reference](https://gittielabs.github.io/SaasLiteLLM/api-reference/jobs/)** - Complete API documentation
+- **[Examples](https://gittielabs.github.io/SaasLiteLLM/examples/full-chain/)** - Integration examples and patterns
 
 ## Local Development
 
@@ -195,8 +185,6 @@ print(f"Profit: ${0.50 - result['costs']['total_cost_usd']}")
 - You track true costs per business operation
 - Set your own pricing (flat rate, markup, tiered)
 - Perfect for document processing, chat sessions, data extraction, etc.
-
-See [USAGE_EXAMPLES.md](USAGE_EXAMPLES.md) for more patterns.
 
 ### Get Team Usage (Admin/Internal)
 
@@ -341,8 +329,6 @@ docker compose down -v
 3. **Flexible Pricing** - Charge what you want, track actual costs internally
 4. **Multi-Tenant** - Isolated teams with their own budgets and limits
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for detailed design.
-
 ## Project Structure
 
 ```
@@ -363,10 +349,28 @@ SaasLiteLLM/
 │   └── docker_setup.sh            # Start Postgres + Redis
 ├── docker-compose.yml             # Local dev services
 ├── Dockerfile                     # Railway deployment
-├── ARCHITECTURE.md                # Detailed architecture guide
-└── USAGE_EXAMPLES.md              # API usage examples
+└── docs/                          # Documentation source (MkDocs)
 ```
+
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+
+- Setting up your development environment
+- Coding standards and best practices
+- Running tests and code quality checks
+- Submitting pull requests
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+This project is built on [LiteLLM](https://github.com/BerriAI/litellm), an amazing open-source project that provides a unified interface to 100+ LLM providers. Special thanks to the LiteLLM team for their excellent work.
 
 ## Support
 
-For issues and questions, please check the LiteLLM documentation or create an issue in this repository.
+- **Documentation**: [https://gittielabs.github.io/SaasLiteLLM/](https://gittielabs.github.io/SaasLiteLLM/)
+- **Issues**: [GitHub Issues](https://github.com/GittieLabs/SaasLiteLLM/issues)
+- **LiteLLM Docs**: [https://docs.litellm.ai/](https://docs.litellm.ai/)
