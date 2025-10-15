@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     # Database
     database_url: str
 
+    # SaaS API Admin Authentication
+    master_key: str  # Admin API key for SaaS management endpoints
+
     # LiteLLM
     litellm_master_key: str
     litellm_config_path: str = "src/config/litellm_config.yaml"
