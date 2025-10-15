@@ -16,6 +16,11 @@ All team API endpoints in SaaS LiteLLM require authentication using **virtual ke
 - Enforce credit limits and access controls
 - Never expose the underlying LiteLLM infrastructure
 
+!!! tip "Server-Side Clients Only"
+    Team API clients should be **server-side** (Python, Node.js, Go, curl, etc.) for security and to avoid CORS restrictions.
+
+    CORS is a browser-only security feature - server-side HTTP clients completely ignore CORS. [:octicons-arrow-right-24: Learn more about CORS vs Authentication](../deployment/cors-and-authentication.md)
+
 ## Authentication Types
 
 SaaS LiteLLM uses **two separate authentication systems**:

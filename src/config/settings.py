@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     environment: str = "development"
     debug: bool = False
 
+    # Admin Panel URL for CORS (optional, supports Railway service references)
+    # In Railway, set to: https://${{admin-panel.RAILWAY_PUBLIC_DOMAIN}}
+    admin_panel_url: Optional[str] = None
+
+    # Additional CORS origins (comma-separated, optional)
+    additional_cors_origins: Optional[str] = None
+
     class Config:
         # Look for .env file in project root (parent of src/)
         env_file = str(Path(__file__).parent.parent.parent / ".env")

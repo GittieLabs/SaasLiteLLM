@@ -429,17 +429,44 @@ Admin Panel:        https://admin.yourcompany.com
 - Use HTTPS for all external communication
 - Internal Railway communication can use HTTP (secured by Railway network)
 
+## CORS and Authentication
+
+!!! info "Team Clients Are NOT Affected by CORS"
+    **Important:** Server-side team clients (Python, Node.js, curl) completely ignore CORS restrictions.
+
+    - ✅ **Team clients** - Use Bearer tokens, work from anywhere, CORS doesn't apply
+    - ⚠️ **Admin panel** - Browser-based, must configure CORS properly
+
+    CORS is a browser-only security feature. Your team API clients work regardless of CORS configuration.
+
+    [:octicons-arrow-right-24: Learn more about CORS vs Authentication](cors-and-authentication.md)
+
+**CORS Configuration:**
+
+The SaaS API CORS middleware only allows specific origins (for the browser-based admin panel):
+
+```python
+# Only affects browser-based clients (admin panel)
+allow_origins=[
+    "http://localhost:3000",  # Local admin panel
+    "https://admin-panel-xxx.up.railway.app",  # Production admin panel
+]
+```
+
+**Team API clients (Python, Node.js, curl) completely ignore this configuration.**
+
 ## Summary
 
-| Component | Connection Type | URL to Use |
-|-----------|----------------|------------|
-| Team Client → SaaS API | External | **Public**: `https://saas-api-xxx.up.railway.app` |
-| Admin Panel → SaaS API | External | **Public**: `https://saas-api-xxx.up.railway.app` |
-| SaaS API → LiteLLM | Internal | **Internal**: `http://litellm-proxy.railway.internal:4000` |
-| Admin → LiteLLM UI | External | **Public**: `https://litellm-proxy-xxx.up.railway.app/ui` |
+| Component | Connection Type | URL to Use | CORS Applies? |
+|-----------|----------------|------------|---------------|
+| Team Client → SaaS API | External | **Public**: `https://saas-api-xxx.up.railway.app` | ❌ No (server-side) |
+| Admin Panel → SaaS API | External | **Public**: `https://saas-api-xxx.up.railway.app` | ✅ Yes (browser) |
+| SaaS API → LiteLLM | Internal | **Internal**: `http://litellm-proxy.railway.internal:4000` | ❌ No |
+| Admin → LiteLLM UI | External | **Public**: `https://litellm-proxy-xxx.up.railway.app/ui` | ✅ Yes (browser) |
 
 ## Next Steps
 
 - **[Railway Deployment Guide](railway.md)** - Complete deployment walkthrough
+- **[CORS & Authentication Guide](cors-and-authentication.md)** - Understand CORS vs authentication
 - **[Environment Variables](environment-variables.md)** - All configuration options
 - **[Security Guide](../admin-dashboard/authentication.md)** - Protect your deployment

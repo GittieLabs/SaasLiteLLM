@@ -32,14 +32,42 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# Add CORS middleware to allow admin panel to connect
+# Add CORS middleware to allow browser-based admin panel to connect
+# IMPORTANT: CORS is a BROWSER-ONLY security feature!
+#
+# Server-side team clients (Python requests, Node.js, curl, Go http, etc.)
+# completely IGNORE CORS restrictions. They are NOT affected by this config.
+#
+# CORS only applies to JavaScript running in web browsers (like the admin panel).
+# Team API authentication is via Bearer tokens, which works regardless of CORS.
+#
+# This CORS config is specifically for the browser-based admin panel (Next.js).
+
+# Build CORS origins list dynamically from environment variables
+cors_origins = [
+    # Local development
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+]
+
+# Add production admin panel URL if configured
+# In Railway, set: ADMIN_PANEL_URL=https://${{admin-panel.RAILWAY_PUBLIC_DOMAIN}}
+if settings.admin_panel_url:
+    cors_origins.append(settings.admin_panel_url)
+
+# Add additional CORS origins if configured (comma-separated)
+if settings.additional_cors_origins:
+    additional = [
+        origin.strip()
+        for origin in settings.additional_cors_origins.split(',')
+        if origin.strip()
+    ]
+    cors_origins.extend(additional)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",  # Admin panel dev server
-        "http://localhost:3002",  # Admin panel alternate port
-        "http://localhost:3001",  # Possible admin panel port
-    ],
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],  # Allow all HTTP methods
     allow_headers=["*"],  # Allow all headers (including X-Admin-Key)

@@ -309,6 +309,14 @@ openssl rand -hex 32
 3. **IP Whitelist** - Limit access to specific IPs
 4. **Rate Limiting** - Prevent brute force attacks
 5. **Audit Logging** - Log all admin actions
+6. **CORS Configuration** - Add production admin panel URL to CORS
+
+!!! tip "CORS Configuration Required"
+    The admin panel is browser-based, so it requires CORS configuration in the SaaS API.
+
+    You must add your production admin panel URL to the `allow_origins` list in `src/saas_api.py`.
+
+    [:octicons-arrow-right-24: Learn how to configure CORS](../deployment/cors-and-authentication.md)
 
 ### Data Protection
 
