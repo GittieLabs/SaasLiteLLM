@@ -185,6 +185,7 @@ nav:
   - Deployment:
       - Local Development: deployment/local-development.md
       - Railway: deployment/railway.md
+      - Railway Networking: deployment/railway-networking.md
       - Environment Variables: deployment/environment-variables.md
       - LiteLLM Setup: litellm-setup.md
       - Integration Flow: integration-flow.md
