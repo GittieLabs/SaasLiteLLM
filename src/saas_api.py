@@ -20,7 +20,7 @@ from .models.job_tracking import (
 )
 
 # Import new API routers
-from .api import organizations, model_groups, teams, credits
+from .api import organizations, model_groups, teams, credits, admin_users
 
 # Import authentication
 from .auth.dependencies import verify_virtual_key
@@ -78,6 +78,7 @@ app.include_router(organizations.router)
 app.include_router(model_groups.router)
 app.include_router(teams.router)
 app.include_router(credits.router)
+app.include_router(admin_users.router)
 
 # Database setup
 engine = create_engine(settings.database_url)
@@ -88,7 +89,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 async def startup_event():
     """Ensure database tables exist on startup"""
     # Import all models to ensure they're registered with Base
-    from .models import organizations, model_groups, credits
+    from .models import organizations, model_groups, credits, admin_users
 
     # Create all tables if they don't exist
     Base.metadata.create_all(bind=engine)
