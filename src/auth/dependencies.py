@@ -141,4 +141,11 @@ async def verify_virtual_key(
             detail="Invalid API key"
         )
 
+    # Check team status
+    if team_creds.status != "active":
+        raise HTTPException(
+            status_code=403,
+            detail=f"Team access is {team_creds.status}. Please contact support."
+        )
+
     return team_creds.team_id

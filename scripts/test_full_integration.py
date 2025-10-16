@@ -13,14 +13,16 @@ def test_create_team_with_litellm():
     print("  TESTING: Create Team with LiteLLM Integration")
     print("="*70 + "\n")
 
-    # 1. Create organization
-    print("1. Creating organization...")
+    # 1. Create organization (with default team automatically created)
+    print("1. Creating organization with default team...")
+    print("   Note: Organization creation now automatically creates a default team")
     response = requests.post(
         f"{BASE_URL}/api/organizations/create",
         json={
             "organization_id": "org_demo_001",
             "name": "Demo Organization",
-            "metadata": {"tier": "premium"}
+            "metadata": {"tier": "premium"},
+            "create_default_team": False  # Don't create default team for this test
         }
     )
     if response.status_code == 400 and "already exists" in response.text:
@@ -28,7 +30,12 @@ def test_create_team_with_litellm():
     else:
         print(f"   Status: {response.status_code}")
         assert response.status_code == 200, f"Failed: {response.text}"
-        print("   Created successfully")
+        org_data = response.json()
+        print("   Organization created successfully")
+        if org_data.get("default_team"):
+            print(f"   Default team created: {org_data['default_team']['team_id']}")
+        else:
+            print("   No default team created (as requested)")
 
     # 2. Create model groups
     print("\n2. Creating model groups...")
@@ -125,17 +132,69 @@ def test_create_team_with_litellm():
     assert response.status_code == 200, "Team not found in database"
     print("   Team verified in database")
 
-    # 5. Check credit balance
+    # 5. Check credit balance (requires authentication)
     print("\n5. Checking credit balance...")
-    response = requests.get(f"{BASE_URL}/api/credits/teams/{team_id}/balance")
-    assert response.status_code == 200, "Failed to get credits"
+    headers = {"Authorization": f"Bearer {virtual_key}"}
+    response = requests.get(f"{BASE_URL}/api/credits/teams/{team_id}/balance", headers=headers)
+    assert response.status_code == 200, f"Failed to get credits: {response.text}"
     credits_data = response.json()
     print(f"   Credits: {credits_data['credits_remaining']} remaining")
 
-    # 6. Instructions for viewing in LiteLLM
+    # 6. Validate admin panel can fetch all the data
+    print("\n6. Validating admin panel endpoints...")
+
+    # Test dashboard stats endpoint
+    response = requests.get(f"{BASE_URL}/api/stats/dashboard")
+    assert response.status_code == 200, f"Dashboard stats failed: {response.text}"
+    stats = response.json()
+    print(f"   Dashboard stats: {stats['organizations']} orgs, {stats['teams']} teams, {stats['modelGroups']} model groups")
+    assert stats['organizations'] >= 1, "No organizations in dashboard stats"
+    assert stats['teams'] >= 1, "No teams in dashboard stats"
+    assert stats['modelGroups'] >= 2, "No model groups in dashboard stats"
+
+    # Test organizations list endpoint
+    response = requests.get(f"{BASE_URL}/api/organizations")
+    assert response.status_code == 200, f"Organizations list failed: {response.text}"
+    orgs = response.json()
+    print(f"   Organizations list: {len(orgs)} organizations found")
+    assert len(orgs) >= 1, "Organizations list is empty"
+    org_ids = [org['organization_id'] for org in orgs]
+    assert "org_demo_001" in org_ids, "Demo organization not in list"
+
+    # Test teams list endpoint
+    response = requests.get(f"{BASE_URL}/api/teams")
+    assert response.status_code == 200, f"Teams list failed: {response.text}"
+    teams = response.json()
+    print(f"   Teams list: {len(teams)} teams found")
+    assert len(teams) >= 1, "Teams list is empty"
+    team_ids = [t['team_id'] for t in teams]
+    assert "team_demo_engineering" in team_ids, "Demo team not in list"
+
+    # Test model groups list endpoint
+    response = requests.get(f"{BASE_URL}/api/model-groups")
+    assert response.status_code == 200, f"Model groups list failed: {response.text}"
+    groups = response.json()
+    print(f"   Model groups list: {len(groups)} groups found")
+    assert len(groups) >= 2, "Model groups list is incomplete"
+    group_names = [g['group_name'] for g in groups]
+    assert "ChatAgent" in group_names, "ChatAgent not in list"
+    assert "AnalysisAgent" in group_names, "AnalysisAgent not in list"
+
+    print("   All admin panel endpoints validated!")
+
+    # 7. Instructions for viewing in LiteLLM
     print("\n" + "="*70)
     print("SUCCESS! Team created with full LiteLLM integration")
     print("="*70)
+    print("\nADMIN PANEL VALIDATION:")
+    print("  ✅ Dashboard stats endpoint working")
+    print("  ✅ Organizations list endpoint working")
+    print("  ✅ Teams list endpoint working")
+    print("  ✅ Model groups list endpoint working")
+    print("\nTO VIEW IN ADMIN DASHBOARD:")
+    print("  1. Open: http://localhost:3002")
+    print("  2. Login with: admin / admin123")
+    print("  3. View organizations, teams, and model groups")
     print("\nTO VIEW IN LITELLM DASHBOARD:")
     print("  1. Open: http://localhost:8002/ui/")
     print("  2. Login with master key: sk-local-dev-master-key-change-me")

@@ -18,12 +18,21 @@ export interface Team {
   organization_id: string
   team_alias?: string
   virtual_key: string
-  model_groups: string[]
+  model_groups: string[]  // Deprecated - use access_groups
+  access_groups: string[]
+  allowed_model_aliases?: string[]
   credits: {
     credits_allocated: number
     credits_used: number
     credits_remaining: number
   }
+  credits_allocated?: number
+  credits_remaining?: number
+  credits_used?: number
+  budget_mode?: 'job_based' | 'consumption_usd' | 'consumption_tokens'
+  credits_per_dollar?: number
+  status?: 'active' | 'suspended' | 'paused'
+  created_at?: string
 }
 
 export interface ModelGroup {
@@ -36,6 +45,39 @@ export interface ModelGroup {
     model_name: string
     priority: number
   }>
+}
+
+// New model alias types
+export interface ModelAlias {
+  model_alias: string
+  display_name: string
+  provider: string
+  actual_model: string
+  litellm_model_id?: string
+  access_groups: string[]
+  description?: string
+  pricing_input?: number
+  pricing_output?: number
+  status: string
+  teams_using?: string[]
+  created_at: string
+  updated_at: string
+}
+
+export interface ModelAccessGroup {
+  group_name: string
+  display_name: string
+  description?: string
+  status: string
+  model_aliases: Array<{
+    model_alias: string
+    display_name: string
+    provider: string
+    actual_model: string
+  }>
+  teams_using?: string[]
+  created_at: string
+  updated_at: string
 }
 
 export interface AuditLog {

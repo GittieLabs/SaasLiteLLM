@@ -29,11 +29,11 @@ export default function ModelGroupsPage() {
   const loadModelGroups = async () => {
     try {
       setLoading(true);
-      const groups = await api.getModelGroups();
-      setModelGroups(groups);
+      const data = await api.getModelGroups();
+      setModelGroups(data);
     } catch (error) {
       console.error('Failed to load model groups:', error);
-      setModelGroups([]); // Show empty list on error
+      setModelGroups([]);
     } finally {
       setLoading(false);
     }

@@ -20,7 +20,7 @@ from .models.job_tracking import (
 )
 
 # Import new API routers
-from .api import organizations, model_groups, teams, credits, admin_users
+from .api import organizations, model_groups, teams, credits, dashboard, models, model_access_groups
 
 # Import authentication
 from .auth.dependencies import verify_virtual_key
@@ -32,45 +32,18 @@ app = FastAPI(
     version="2.0.0"
 )
 
-# Add CORS middleware to allow browser-based admin panel to connect
-# IMPORTANT: CORS is a BROWSER-ONLY security feature!
-#
-# Server-side team clients (Python requests, Node.js, curl, Go http, etc.)
-# completely IGNORE CORS restrictions. They are NOT affected by this config.
-#
-# CORS only applies to JavaScript running in web browsers (like the admin panel).
-# Team API authentication is via Bearer tokens, which works regardless of CORS.
-#
-# This CORS config is specifically for the browser-based admin panel (Next.js).
-
-# Build CORS origins list dynamically from environment variables
-cors_origins = [
-    # Local development
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-]
-
-# Add production admin panel URL if configured
-# In Railway, set: ADMIN_PANEL_URL=https://${{admin-panel.RAILWAY_PUBLIC_DOMAIN}}
-if settings.admin_panel_url:
-    cors_origins.append(settings.admin_panel_url)
-
-# Add additional CORS origins if configured (comma-separated)
-if settings.additional_cors_origins:
-    additional = [
-        origin.strip()
-        for origin in settings.additional_cors_origins.split(',')
-        if origin.strip()
-    ]
-    cors_origins.extend(additional)
-
+# Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=cors_origins,
+    allow_origins=[
+        "http://localhost:3002",  # Admin panel (development)
+        "http://localhost:3001",  # Backup admin panel port
+        "http://127.0.0.1:3002",
+        "http://127.0.0.1:3001",
+    ],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods
-    allow_headers=["*"],  # Allow all headers (including X-Admin-Key)
+    allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
+    allow_headers=["*"],  # Allow all headers
 )
 
 # Include new routers
@@ -78,7 +51,9 @@ app.include_router(organizations.router)
 app.include_router(model_groups.router)
 app.include_router(teams.router)
 app.include_router(credits.router)
-app.include_router(admin_users.router)
+app.include_router(dashboard.router)
+app.include_router(models.router)
+app.include_router(model_access_groups.router)
 
 # Database setup
 engine = create_engine(settings.database_url)
@@ -89,7 +64,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 async def startup_event():
     """Ensure database tables exist on startup"""
     # Import all models to ensure they're registered with Base
-    from .models import organizations, model_groups, credits, admin_users
+    from .models import organizations, model_groups, credits
 
     # Create all tables if they don't exist
     Base.metadata.create_all(bind=engine)
@@ -120,10 +95,19 @@ class JobCreateResponse(BaseModel):
 
 class LLMCallRequest(BaseModel):
     model_group: str  # Name of model group (e.g., "ResumeAgent", "ParsingAgent")
-    messages: List[Dict[str, str]]
+    messages: List[Dict[str, Any]]  # Changed to Any to support all message types
     purpose: Optional[str] = None
     temperature: Optional[float] = 0.7
     max_tokens: Optional[int] = None
+    # Support for structured outputs and function calling
+    response_format: Optional[Dict[str, Any]] = None  # {"type": "json_object"} or JSON schema
+    tools: Optional[List[Dict[str, Any]]] = None  # Function calling tools
+    tool_choice: Optional[Any] = None  # "auto", "none", or specific tool
+    # Additional OpenAI parameters
+    top_p: Optional[float] = None
+    frequency_penalty: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    stop: Optional[List[str]] = None
 
 
 class LLMCallResponse(BaseModel):
@@ -149,15 +133,24 @@ class JobCompleteResponse(BaseModel):
 # Helper Functions
 async def call_litellm(
     model: str,
-    messages: List[Dict[str, str]],
+    messages: List[Dict[str, Any]],
     virtual_key: str,
     team_id: str,
     temperature: float = 0.7,
-    max_tokens: Optional[int] = None
+    max_tokens: Optional[int] = None,
+    response_format: Optional[Dict[str, Any]] = None,
+    tools: Optional[List[Dict[str, Any]]] = None,
+    tool_choice: Optional[Any] = None,
+    top_p: Optional[float] = None,
+    frequency_penalty: Optional[float] = None,
+    presence_penalty: Optional[float] = None,
+    stop: Optional[List[str]] = None,
+    stream: bool = False
 ) -> Dict[str, Any]:
     """
     Call LiteLLM proxy with resolved model and team-specific virtual key.
     Returns response with usage and cost data.
+    Supports all OpenAI parameters including structured outputs and function calling.
     """
     litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
 
@@ -173,13 +166,33 @@ async def call_litellm(
         "user": team_id,  # For LiteLLM tracking
     }
 
+    # Add optional parameters if provided
     if max_tokens:
         payload["max_tokens"] = max_tokens
+    if response_format:
+        payload["response_format"] = response_format
+    if tools:
+        payload["tools"] = tools
+    if tool_choice:
+        payload["tool_choice"] = tool_choice
+    if top_p:
+        payload["top_p"] = top_p
+    if frequency_penalty:
+        payload["frequency_penalty"] = frequency_penalty
+    if presence_penalty:
+        payload["presence_penalty"] = presence_penalty
+    if stop:
+        payload["stop"] = stop
+    if stream:
+        payload["stream"] = stream
 
     async with httpx.AsyncClient() as client:
-        response = await client.post(litellm_url, json=payload, headers=headers, timeout=120.0)
-        response.raise_for_status()
-        return response.json()
+        if stream:
+            return await client.post(litellm_url, json=payload, headers=headers, timeout=120.0)
+        else:
+            response = await client.post(litellm_url, json=payload, headers=headers, timeout=120.0)
+            response.raise_for_status()
+            return response.json()
 
 
 def calculate_job_costs(db: Session, job_id: uuid.UUID) -> Dict[str, Any]:
@@ -336,7 +349,14 @@ async def make_llm_call(
             virtual_key=team_credits.virtual_key,
             team_id=job.team_id,
             temperature=request.temperature,
-            max_tokens=request.max_tokens
+            max_tokens=request.max_tokens,
+            response_format=request.response_format,
+            tools=request.tools,
+            tool_choice=request.tool_choice,
+            top_p=request.top_p,
+            frequency_penalty=request.frequency_penalty,
+            presence_penalty=request.presence_penalty,
+            stop=request.stop
         )
 
         end_time = datetime.utcnow()
@@ -348,9 +368,31 @@ async def make_llm_call(
         completion_tokens = usage.get("completion_tokens", 0)
         total_tokens = usage.get("total_tokens", 0)
 
-        # Calculate cost (LiteLLM includes this in response metadata)
-        # For now, estimate: gpt-3.5-turbo is $0.0005/1K prompt, $0.0015/1K completion
-        cost_usd = (prompt_tokens * 0.0005 / 1000) + (completion_tokens * 0.0015 / 1000)
+        # Extract actual cost from LiteLLM response
+        # LiteLLM calculates accurate costs based on model-specific pricing
+        cost_usd = 0.0
+
+        # Try multiple possible locations for cost in LiteLLM response
+        if "_hidden_params" in litellm_response:
+            cost_usd = litellm_response["_hidden_params"].get("response_cost", 0.0)
+
+        # Fallback to usage object if cost is there
+        if not cost_usd and "cost" in usage:
+            cost_usd = usage.get("cost", 0.0)
+
+        # Fallback: Query model pricing from database if LiteLLM didn't provide cost
+        if not cost_usd:
+            from ..models.model_aliases import ModelAlias
+            model_record = db.query(ModelAlias).filter(
+                ModelAlias.model_alias == primary_model
+            ).first()
+
+            if model_record and model_record.pricing_input and model_record.pricing_output:
+                # pricing_input and pricing_output are cost per 1M tokens
+                cost_usd = (
+                    (prompt_tokens * float(model_record.pricing_input) / 1_000_000) +
+                    (completion_tokens * float(model_record.pricing_output) / 1_000_000)
+                )
 
         # Store LLM call record with model group tracking
         llm_call = LLMCall(
@@ -402,6 +444,225 @@ async def make_llm_call(
         raise HTTPException(status_code=500, detail=f"LLM call failed: {str(e)}")
 
 
+@app.post("/api/jobs/{job_id}/llm-call-stream")
+async def make_llm_call_stream(
+    job_id: str,
+    request: LLMCallRequest,
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
+):
+    """
+    Make a streaming LLM call within a job context using Server-Sent Events (SSE).
+
+    Supports:
+    - Real-time text streaming
+    - Structured output streaming (response_format)
+    - Function calling streaming (tools)
+    - All OpenAI parameters
+
+    The stream forwards directly from LiteLLM to minimize latency.
+
+    Requires: Authorization header with virtual API key
+    """
+    from fastapi.responses import StreamingResponse
+
+    # Get job
+    job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Verify job belongs to authenticated team
+    if job.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Job does not belong to your team"
+        )
+
+    # Get team credentials
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == job.team_id
+    ).first()
+
+    if not team_credits or not team_credits.virtual_key:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team '{job.team_id}' not found or has no virtual key"
+        )
+
+    # Update job status to in_progress if pending
+    if job.status == JobStatus.PENDING:
+        job.status = JobStatus.IN_PROGRESS
+        job.started_at = datetime.utcnow()
+        db.commit()
+
+    # Resolve model group to actual model
+    from .models.credits import TeamCredits
+    from .services.model_resolver import ModelResolver, ModelResolutionError
+
+    model_resolver = ModelResolver(db)
+    try:
+        primary_model, fallback_models = model_resolver.resolve_model_group(
+            team_id=job.team_id,
+            model_group_name=request.model_group
+        )
+    except ModelResolutionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
+    # Track model group usage
+    if not job.model_groups_used:
+        job.model_groups_used = []
+    if request.model_group not in job.model_groups_used:
+        job.model_groups_used.append(request.model_group)
+        db.commit()
+
+    # Create streaming generator
+    async def stream_llm_response():
+        litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {team_credits.virtual_key}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": primary_model,
+            "messages": request.messages,
+            "temperature": request.temperature,
+            "stream": True,  # Enable streaming
+            "user": job.team_id,
+        }
+
+        # Add optional parameters
+        if request.max_tokens:
+            payload["max_tokens"] = request.max_tokens
+        if request.response_format:
+            payload["response_format"] = request.response_format
+        if request.tools:
+            payload["tools"] = request.tools
+        if request.tool_choice:
+            payload["tool_choice"] = request.tool_choice
+        if request.top_p:
+            payload["top_p"] = request.top_p
+        if request.frequency_penalty:
+            payload["frequency_penalty"] = request.frequency_penalty
+        if request.presence_penalty:
+            payload["presence_penalty"] = request.presence_penalty
+        if request.stop:
+            payload["stop"] = request.stop
+
+        # Track accumulated response for database storage
+        accumulated_content = ""
+        accumulated_tokens = {"prompt": 0, "completion": 0, "total": 0}
+        litellm_request_id = None
+        start_time = datetime.utcnow()
+
+        try:
+            async with httpx.AsyncClient() as client:
+                async with client.stream('POST', litellm_url, json=payload, headers=headers, timeout=120.0) as response:
+                    response.raise_for_status()
+
+                    # Stream chunks to client
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            chunk_data = line[6:]  # Remove "data: " prefix
+
+                            if chunk_data == "[DONE]":
+                                yield f"data: [DONE]\n\n"
+                                break
+
+                            try:
+                                import json
+                                chunk_json = json.loads(chunk_data)
+
+                                # Extract request ID from first chunk
+                                if litellm_request_id is None:
+                                    litellm_request_id = chunk_json.get("id")
+
+                                # Accumulate content
+                                if "choices" in chunk_json:
+                                    for choice in chunk_json["choices"]:
+                                        # Text content
+                                        if "delta" in choice and "content" in choice["delta"]:
+                                            accumulated_content += choice["delta"]["content"]
+
+                                # Extract usage if present (usually in last chunk)
+                                if "usage" in chunk_json:
+                                    accumulated_tokens = {
+                                        "prompt": chunk_json["usage"].get("prompt_tokens", 0),
+                                        "completion": chunk_json["usage"].get("completion_tokens", 0),
+                                        "total": chunk_json["usage"].get("total_tokens", 0)
+                                    }
+
+                                # Stream to client immediately (no buffering)
+                                yield f"data: {chunk_data}\n\n"
+
+                            except json.JSONDecodeError:
+                                continue
+
+            # After streaming completes, store in database
+            end_time = datetime.utcnow()
+            latency_ms = int((end_time - start_time).total_seconds() * 1000)
+
+            # Calculate cost (fallback to model pricing if not provided)
+            cost_usd = 0.0
+            from .models.model_aliases import ModelAlias
+            model_record = db.query(ModelAlias).filter(
+                ModelAlias.model_alias == primary_model
+            ).first()
+
+            if model_record and model_record.pricing_input and model_record.pricing_output:
+                cost_usd = (
+                    (accumulated_tokens["prompt"] * float(model_record.pricing_input) / 1_000_000) +
+                    (accumulated_tokens["completion"] * float(model_record.pricing_output) / 1_000_000)
+                )
+
+            # Store LLM call record
+            llm_call = LLMCall(
+                job_id=job.job_id,
+                litellm_request_id=litellm_request_id,
+                model_used=primary_model,
+                model_group_used=request.model_group,
+                resolved_model=primary_model,
+                prompt_tokens=accumulated_tokens["prompt"],
+                completion_tokens=accumulated_tokens["completion"],
+                total_tokens=accumulated_tokens["total"],
+                cost_usd=cost_usd,
+                latency_ms=latency_ms,
+                purpose=request.purpose,
+                request_data={"messages": request.messages, "model_group": request.model_group},
+                response_data={"content": accumulated_content, "streaming": True}
+            )
+
+            db.add(llm_call)
+            db.commit()
+
+        except Exception as e:
+            # Record failed call
+            llm_call = LLMCall(
+                job_id=job.job_id,
+                model_group_used=request.model_group,
+                purpose=request.purpose,
+                error=str(e),
+                request_data={"messages": request.messages, "model_group": request.model_group}
+            )
+            db.add(llm_call)
+            db.commit()
+
+            # Send error to client
+            import json
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        stream_llm_response(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
+
+
 @app.post("/api/jobs/{job_id}/complete", response_model=JobCompleteResponse)
 async def complete_job(
     job_id: str,
@@ -439,8 +700,13 @@ async def complete_job(
     # Calculate costs
     costs = calculate_job_costs(db, job.job_id)
 
-    # Credit deduction logic
+    # Credit deduction logic with flexible budget modes
     credit_manager = get_credit_manager(db)
+
+    # Get team's budget mode
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == job.team_id
+    ).first()
 
     # Deduct credit only if:
     # 1. Job status is "completed" (not "failed")
@@ -448,17 +714,41 @@ async def complete_job(
     # 3. Credit hasn't already been applied
     if (request.status == "completed" and
         costs["failed_calls"] == 0 and
-        not job.credit_applied):
+        not job.credit_applied and
+        team_credits):
 
         try:
-            # Deduct 1 credit for successful job
+            # Calculate credits to deduct based on budget mode
+            credits_to_deduct = 1  # Default: job_based
+
+            if team_credits.budget_mode == "consumption_usd":
+                # Credits based on actual USD cost
+                # credits_per_dollar defaults to 10 (1 credit = $0.10)
+                credits_per_dollar = float(team_credits.credits_per_dollar) if team_credits.credits_per_dollar else 10.0
+                credits_to_deduct = int(costs["total_cost_usd"] * credits_per_dollar)
+                # Minimum 1 credit for any successful job
+                credits_to_deduct = max(1, credits_to_deduct)
+            elif team_credits.budget_mode == "consumption_tokens":
+                # Credits based on tokens used
+                # 1 credit = 10,000 tokens
+                credits_to_deduct = max(1, costs["total_tokens"] // 10000)
+            # else: job_based mode, use default 1 credit
+
+            # Deduct credits
             credit_manager.deduct_credit(
                 team_id=job.team_id,
                 job_id=job.job_id,
-                credits_amount=1,
-                reason=f"Job {job.job_type} completed successfully"
+                credits_amount=credits_to_deduct,
+                reason=f"Job {job.job_type} completed ({team_credits.budget_mode} mode: {credits_to_deduct} credits)"
             )
             job.credit_applied = True
+
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.info(
+                f"Deducted {credits_to_deduct} credits for job {job_id} "
+                f"(mode: {team_credits.budget_mode}, cost: ${costs['total_cost_usd']}, tokens: {costs['total_tokens']})"
+            )
         except InsufficientCreditsError as e:
             # Log the error but don't fail the job completion
             # The job is already done, we just can't charge for it

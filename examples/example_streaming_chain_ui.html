@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Streaming Chat Demo - Full Chain</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 800px;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+            font-size: 14px;
+        }
+
+        .flow-diagram {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            margin-top: 15px;
+            border-radius: 10px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            text-align: left;
+        }
+
+        .chat-container {
+            height: 400px;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 12px 16px;
+            border-radius: 12px;
+            max-width: 80%;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            background: #667eea;
+            color: white;
+            margin-left: auto;
+            text-align: right;
+        }
+
+        .message.assistant {
+            background: white;
+            border: 1px solid #e0e0e0;
+        }
+
+        .message.system {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+            font-size: 12px;
+            text-align: center;
+            max-width: 100%;
+        }
+
+        .input-container {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        input[type="text"], textarea {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 60px;
+        }
+
+        button {
+            padding: 12px 24px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .options {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+
+        .option-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .option-group label {
+            color: #666;
+        }
+
+        .option-group input, .option-group select {
+            padding: 6px 10px;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+
+        .streaming-indicator {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 10px;
+            background: #e3f2fd;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            font-size: 12px;
+            color: #1976d2;
+        }
+
+        .streaming-indicator.active {
+            display: flex;
+        }
+
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #e0e0e0;
+            border-top: 2px solid #1976d2;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .stats {
+            font-size: 11px;
+            color: #999;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Streaming Chat Demo</h1>
+            <p>Full streaming chain: Browser ← Client Server ← SaaS API ← LiteLLM</p>
+            <div class="flow-diagram">
+                UI (Browser) ← SSE ← Client Server (port 8001)<br>
+                ↑ You are here  ↓<br>
+                Client Server ← SSE ← SaaS API (port 8003)<br>
+                                 ↓<br>
+                            SaaS API ← SSE ← LiteLLM Proxy<br>
+                                         ↓<br>
+                                    LLM Provider
+            </div>
+        </div>
+
+        <div class="chat-container" id="chatContainer">
+            <div class="message system">
+                Welcome! This demo shows real-time streaming through the full chain.
+            </div>
+        </div>
+
+        <div class="input-container">
+            <div class="streaming-indicator" id="streamingIndicator">
+                <div class="spinner"></div>
+                <span>Streaming response...</span>
+            </div>
+
+            <div class="options">
+                <div class="option-group">
+                    <label>Model Group:</label>
+                    <select id="modelGroup">
+                        <option value="chat-fast">chat-fast</option>
+                        <option value="chat-quality">chat-quality</option>
+                        <option value="chat-balanced">chat-balanced</option>
+                    </select>
+                </div>
+                <div class="option-group">
+                    <label>Temperature:</label>
+                    <input type="number" id="temperature" value="0.7" min="0" max="2" step="0.1" style="width: 60px">
+                </div>
+                <div class="option-group">
+                    <label>
+                        <input type="checkbox" id="streamMode" checked>
+                        Stream
+                    </label>
+                </div>
+            </div>
+
+            <div class="input-row">
+                <textarea id="messageInput" placeholder="Type your message here..."></textarea>
+                <button id="sendBtn" onclick="sendMessage()">Send</button>
+            </div>
+
+            <div class="stats" id="stats"></div>
+        </div>
+    </div>
+
+    <script>
+        const CLIENT_SERVER_URL = 'http://localhost:8001';
+        let messages = [];
+        let currentJobId = null;
+
+        // Send message
+        async function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+
+            // Get options
+            const modelGroup = document.getElementById('modelGroup').value;
+            const temperature = parseFloat(document.getElementById('temperature').value);
+            const streamMode = document.getElementById('streamMode').checked;
+
+            // Add user message to chat
+            addMessage('user', message);
+            input.value = '';
+
+            // Disable input while processing
+            setInputEnabled(false);
+
+            // Build messages array
+            messages.push({ role: 'user', content: message });
+
+            if (streamMode) {
+                await streamChat(modelGroup, temperature);
+            } else {
+                await nonStreamChat(modelGroup, temperature);
+            }
+
+            setInputEnabled(true);
+        }
+
+        // Non-streaming chat
+        async function nonStreamChat(modelGroup, temperature) {
+            const startTime = Date.now();
+
+            try {
+                const response = await fetch(`${CLIENT_SERVER_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        messages: messages,
+                        model_group: modelGroup,
+                        temperature: temperature,
+                        stream: false
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+                const elapsed = Date.now() - startTime;
+
+                // Add assistant response
+                addMessage('assistant', data.content);
+                messages.push({ role: 'assistant', content: data.content });
+
+                // Update stats
+                updateStats(data.usage, elapsed, data.job_id);
+
+            } catch (error) {
+                addMessage('system', `Error: ${error.message}`);
+                console.error('Error:', error);
+            }
+        }
+
+        // Streaming chat
+        async function streamChat(modelGroup, temperature) {
+            const startTime = Date.now();
+            let assistantMessage = '';
+            let messageElement = null;
+            let usage = null;
+
+            showStreamingIndicator(true);
+
+            try {
+                const response = await fetch(`${CLIENT_SERVER_URL}/api/chat/stream`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        messages: messages,
+                        model_group: modelGroup,
+                        temperature: temperature,
+                        stream: true
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.substring(6);
+
+                            try {
+                                const event = JSON.parse(data);
+
+                                if (event.event === 'job_created') {
+                                    currentJobId = event.job_id;
+                                    addMessage('system', `Job created: ${event.job_id}`);
+                                }
+                                else if (event.event === 'content') {
+                                    // Create message element if first chunk
+                                    if (!messageElement) {
+                                        messageElement = addMessage('assistant', '');
+                                    }
+
+                                    // Append content
+                                    assistantMessage += event.content;
+                                    messageElement.textContent = assistantMessage;
+
+                                    // Auto-scroll
+                                    scrollToBottom();
+                                }
+                                else if (event.event === 'usage') {
+                                    usage = event.usage;
+                                }
+                                else if (event.event === 'done') {
+                                    const elapsed = Date.now() - startTime;
+                                    messages.push({ role: 'assistant', content: assistantMessage });
+                                    updateStats(usage, elapsed, currentJobId);
+                                }
+                                else if (event.event === 'error') {
+                                    addMessage('system', `Error: ${event.error}`);
+                                }
+                            } catch (e) {
+                                // Skip invalid JSON
+                            }
+                        }
+                    }
+                }
+
+            } catch (error) {
+                addMessage('system', `Error: ${error.message}`);
+                console.error('Error:', error);
+            } finally {
+                showStreamingIndicator(false);
+            }
+        }
+
+        // Add message to chat
+        function addMessage(role, content) {
+            const container = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `message ${role}`;
+            messageDiv.textContent = content;
+            container.appendChild(messageDiv);
+            scrollToBottom();
+            return messageDiv;
+        }
+
+        // Update stats
+        function updateStats(usage, elapsed, jobId) {
+            const stats = document.getElementById('stats');
+            if (usage) {
+                stats.textContent = `Job: ${jobId || 'N/A'} | Tokens: ${usage.total_tokens} (prompt: ${usage.prompt_tokens}, completion: ${usage.completion_tokens}) | Time: ${elapsed}ms`;
+            } else {
+                stats.textContent = `Job: ${jobId || 'N/A'} | Time: ${elapsed}ms`;
+            }
+        }
+
+        // UI helpers
+        function setInputEnabled(enabled) {
+            document.getElementById('messageInput').disabled = !enabled;
+            document.getElementById('sendBtn').disabled = !enabled;
+        }
+
+        function showStreamingIndicator(show) {
+            const indicator = document.getElementById('streamingIndicator');
+            if (show) {
+                indicator.classList.add('active');
+            } else {
+                indicator.classList.remove('active');
+            }
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chatContainer');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        // Enter to send
+        document.getElementById('messageInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Test connection on load
+        window.addEventListener('load', async () => {
+            try {
+                const response = await fetch(`${CLIENT_SERVER_URL}/`);
+                const data = await response.json();
+                addMessage('system', `Connected to ${data.service} (Team: ${data.team_id})`);
+            } catch (error) {
+                addMessage('system', `Failed to connect to client server at ${CLIENT_SERVER_URL}. Make sure it's running!`);
+            }
+        });
+    </script>
+</body>
+</html>

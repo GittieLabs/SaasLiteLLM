@@ -1,7 +1,7 @@
 """
 Credit tracking models for billing and usage limits
 """
-from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, UUID, Index, Computed
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey, UUID, Index, Computed, Numeric
 from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from datetime import datetime
 import uuid
@@ -26,6 +26,10 @@ class TeamCredits(Base):
     refill_period = Column(String(50))  # 'monthly', 'weekly', 'daily'
     last_refill_at = Column(DateTime)
     virtual_key = Column(String(500))  # LiteLLM virtual API key for this team
+    # Budget mode: how credits are deducted
+    budget_mode = Column(String(50), default='job_based', nullable=False)  # 'job_based', 'consumption_usd', 'consumption_tokens'
+    credits_per_dollar = Column(Numeric(10, 2), default=10.0)  # Conversion rate for consumption_usd mode
+    status = Column(String(20), default='active', nullable=False)  # 'active', 'suspended', 'paused'
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -46,6 +50,9 @@ class TeamCredits(Base):
             "refill_amount": self.refill_amount,
             "refill_period": self.refill_period,
             "last_refill_at": self.last_refill_at.isoformat() if self.last_refill_at else None,
+            "budget_mode": self.budget_mode,
+            "credits_per_dollar": float(self.credits_per_dollar) if self.credits_per_dollar else 10.0,
+            "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
         }

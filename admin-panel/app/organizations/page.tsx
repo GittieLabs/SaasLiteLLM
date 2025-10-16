@@ -8,6 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Plus } from 'lucide-react';
 import { Organization } from '@/types';
 import { api } from '@/lib/api-client';
@@ -17,9 +19,14 @@ export default function OrganizationsPage() {
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
+    organization_id: '',
     name: '',
-    status: 'active',
+    create_default_team: true,
+    default_team_name: '',
+    default_team_access_groups: [] as string[],
+    default_team_credits: 1000,
   });
+  const [accessGroupInput, setAccessGroupInput] = useState('');
 
   useEffect(() => {
     loadOrganizations();
@@ -28,11 +35,11 @@ export default function OrganizationsPage() {
   const loadOrganizations = async () => {
     try {
       setLoading(true);
-      const orgs = await api.getOrganizations();
-      setOrganizations(orgs);
+      const data = await api.getOrganizations();
+      setOrganizations(data);
     } catch (error) {
       console.error('Failed to load organizations:', error);
-      setOrganizations([]); // Show empty list on error
+      setOrganizations([]);
     } finally {
       setLoading(false);
     }
@@ -43,11 +50,37 @@ export default function OrganizationsPage() {
     try {
       await api.createOrganization(formData);
       setShowCreateForm(false);
-      setFormData({ name: '', status: 'active' });
+      setFormData({
+        organization_id: '',
+        name: '',
+        create_default_team: true,
+        default_team_name: '',
+        default_team_access_groups: [],
+        default_team_credits: 1000,
+      });
+      setAccessGroupInput('');
       loadOrganizations();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to create organization:', error);
+      alert(`Failed to create organization: ${error.message}`);
     }
+  };
+
+  const addAccessGroup = () => {
+    if (accessGroupInput && !formData.default_team_access_groups.includes(accessGroupInput)) {
+      setFormData({
+        ...formData,
+        default_team_access_groups: [...formData.default_team_access_groups, accessGroupInput],
+      });
+      setAccessGroupInput('');
+    }
+  };
+
+  const removeAccessGroup = (group: string) => {
+    setFormData({
+      ...formData,
+      default_team_access_groups: formData.default_team_access_groups.filter((g) => g !== group),
+    });
   };
 
   return (
@@ -76,18 +109,119 @@ export default function OrganizationsPage() {
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSubmit} className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Organization Name</Label>
-                      <Input
-                        id="name"
-                        value={formData.name}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        required
-                      />
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="organization_id">Organization ID *</Label>
+                        <Input
+                          id="organization_id"
+                          placeholder="e.g., acme-corp"
+                          value={formData.organization_id}
+                          onChange={(e) => setFormData({ ...formData, organization_id: e.target.value })}
+                          required
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Unique identifier for this organization
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="name">Organization Name *</Label>
+                        <Input
+                          id="name"
+                          placeholder="e.g., Acme Corporation"
+                          value={formData.name}
+                          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-4 p-4 border rounded-lg bg-muted/50">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox
+                          id="create_default_team"
+                          checked={formData.create_default_team}
+                          onCheckedChange={(checked) =>
+                            setFormData({ ...formData, create_default_team: checked as boolean })
+                          }
+                        />
+                        <Label htmlFor="create_default_team" className="font-semibold">
+                          Create Default Team
+                        </Label>
+                      </div>
+
+                      {formData.create_default_team && (
+                        <div className="space-y-4 pl-6">
+                          <div className="space-y-2">
+                            <Label htmlFor="default_team_name">Default Team Name</Label>
+                            <Input
+                              id="default_team_name"
+                              placeholder="Leave empty to use organization name"
+                              value={formData.default_team_name}
+                              onChange={(e) =>
+                                setFormData({ ...formData, default_team_name: e.target.value })
+                              }
+                            />
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label>Model Access Groups</Label>
+                            <div className="flex gap-2">
+                              <Input
+                                placeholder="Enter access group name (e.g., basic-chat)"
+                                value={accessGroupInput}
+                                onChange={(e) => setAccessGroupInput(e.target.value)}
+                                onKeyPress={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.preventDefault();
+                                    addAccessGroup();
+                                  }
+                                }}
+                              />
+                              <Button type="button" variant="outline" onClick={addAccessGroup}>
+                                Add
+                              </Button>
+                            </div>
+                            {formData.default_team_access_groups.length > 0 ? (
+                              <div className="flex flex-wrap gap-2 mt-2">
+                                {formData.default_team_access_groups.map((group) => (
+                                  <Badge
+                                    key={group}
+                                    variant="secondary"
+                                    className="cursor-pointer"
+                                    onClick={() => removeAccessGroup(group)}
+                                  >
+                                    {group} ×
+                                  </Badge>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground mt-2">
+                                No access groups added. Add groups to grant model access to the default team.
+                              </p>
+                            )}
+                          </div>
+
+                          <div className="space-y-2">
+                            <Label htmlFor="default_team_credits">Initial Credits</Label>
+                            <Input
+                              id="default_team_credits"
+                              type="number"
+                              value={formData.default_team_credits}
+                              onChange={(e) =>
+                                setFormData({
+                                  ...formData,
+                                  default_team_credits: Number(e.target.value),
+                                })
+                              }
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div className="flex gap-2">
-                      <Button type="submit">Create</Button>
+                      <Button type="submit">Create Organization</Button>
                       <Button type="button" variant="outline" onClick={() => setShowCreateForm(false)}>
                         Cancel
                       </Button>

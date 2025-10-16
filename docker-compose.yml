@@ -42,9 +42,14 @@ services:
       - "8002:4000"
     volumes:
       - ./src/config/litellm_config.yaml:/app/config.yaml
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql://litellm_user:litellm_password@postgres:5432/litellm
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:-sk-local-dev-master-key-change-me}
+      LITELLM_SALT_KEY: ${LITELLM_SALT_KEY:-sk-salt-7f8a9b2c4d6e1f3a5b7c9d2e4f6a8b0c}
+      STORE_MODEL_IN_DB: "True"
+      PROXY_ADMIN_ID: ${PROXY_ADMIN_ID:-default_user_id}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       REDIS_HOST: redis

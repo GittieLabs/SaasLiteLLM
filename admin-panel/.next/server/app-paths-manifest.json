@@ -1,5 +1,7 @@
 {
-  "/organizations/page": "app/organizations/page.js",
+  "/models/page": "app/models/page.js",
+  "/model-access-groups/page": "app/model-access-groups/page.js",
   "/teams/page": "app/teams/page.js",
-  "/page": "app/page.js"
+  "/page": "app/page.js",
+  "/organizations/page": "app/organizations/page.js"
 }
