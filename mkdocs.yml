@@ -180,6 +180,7 @@ nav:
       - LLM Calls: api-reference/llm-calls.md
       - Teams: api-reference/teams.md
       - Organizations: api-reference/organizations.md
+      - Admin Users: api-reference/admin-users.md
       - Full API Docs (ReDoc): api-reference/redoc-link.md
 
   - Deployment:

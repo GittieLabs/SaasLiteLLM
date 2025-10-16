@@ -13,9 +13,29 @@ Integration tests verify that multiple components work together correctly. For S
 
 ## Test Scripts
 
-The project includes two main integration test scripts located in the `scripts/` directory:
+The project includes three main integration test scripts located in the `scripts/` directory:
 
-### 1. test_minimal_version.py
+### 1. test_jwt_integration.py
+
+**Purpose**: Comprehensive testing of JWT authentication and dual auth system.
+
+**What It Tests**:
+- Setup/Login flows (owner account creation)
+- JWT Bearer token authentication
+- Legacy X-Admin-Key authentication (backward compatibility)
+- Dual authentication on management endpoints
+- Role-based access control (owner, admin, user roles)
+- Admin user management (create, list, permissions)
+- Session management and logout
+- Audit logging system
+- Security features (unauthorized access protection)
+- Credits management with both auth methods
+
+**Use Case**: Validates that the admin authentication system is working correctly with both JWT and legacy authentication methods.
+
+**Test Results**: See [Integration Test Results](../INTEGRATION_TEST_RESULTS.md) for detailed test results documentation.
+
+### 2. test_minimal_version.py
 
 **Purpose**: Tests core SaaS API functionality without requiring full LiteLLM integration.
 
@@ -113,6 +133,109 @@ Expected output:
 ```
 
 ### Running the Tests
+
+#### JWT Integration Test
+
+Tests JWT authentication and dual auth system:
+
+```bash
+# From project root
+python3 scripts/test_jwt_integration.py
+```
+
+**Prerequisites**:
+- SaaS API running on port 8004
+- PostgreSQL database accessible
+- Redis running (for session management)
+- Admin-related tables created (admin_users, admin_sessions, admin_audit_log)
+
+**Expected Output**:
+
+```
+======================================================================
+JWT Authentication & Dual Auth Integration Tests
+======================================================================
+
+======================================================================
+1. Health Check
+======================================================================
+
+✓ API health check passed: {'status': 'healthy'}
+
+======================================================================
+2. Setup Status Check
+======================================================================
+
+ℹ Setup status: {
+  "needs_setup": true,
+  "has_users": false
+}
+ℹ Setup is needed - will create owner account
+
+======================================================================
+3. Authentication Setup
+======================================================================
+
+ℹ Creating owner account...
+✓ Owner account created successfully
+ℹ User ID: ae89197e-e24a-4e55-a9e2-70ba9a273730
+ℹ Role: owner
+
+======================================================================
+4. JWT Authentication Test
+======================================================================
+
+✓ JWT authentication successful
+ℹ Current user: test-owner@example.com (owner)
+
+======================================================================
+5. Legacy X-Admin-Key Authentication Test
+======================================================================
+
+✓ Legacy X-Admin-Key authentication successful
+ℹ Retrieved 2 model groups
+
+======================================================================
+6. Dual Authentication - Organizations
+======================================================================
+
+ℹ Testing organizations with JWT...
+✓ JWT auth works for organizations endpoint
+ℹ Testing organizations with X-Admin-Key...
+✓ X-Admin-Key auth works for organizations endpoint
+
+...
+
+======================================================================
+Test Summary
+======================================================================
+
+Results: 12/12 tests passed
+
+  PASS  Health Check
+  PASS  Setup/Login
+  PASS  JWT Authentication
+  PASS  Legacy X-Admin-Key Auth
+  PASS  Dual Auth - Organizations
+  PASS  Create Organization
+  PASS  Create Team
+  PASS  List Admin Users
+  PASS  Create Admin User
+  PASS  View Audit Logs
+  PASS  Unauthorized Access Protection
+  PASS  Credits Management
+
+======================================================================
+
+✓ All integration tests passed!
+```
+
+**Test Credentials Created**:
+- Email: test-owner@example.com
+- Password: TestPassword123!
+- Role: owner
+
+For detailed test results, see [Integration Test Results](../INTEGRATION_TEST_RESULTS.md).
 
 #### Minimal Version Test
 
@@ -238,6 +361,119 @@ fi
 ```
 
 ## Test Scenarios Covered
+
+### JWT Authentication & Admin User Management
+
+**Endpoints**:
+- `/api/admin-users/setup/status`
+- `/api/admin-users/setup`
+- `/api/admin-users/login`
+- `/api/admin-users/logout`
+- `/api/admin-users/me`
+- `/api/admin-users` (list, create, update, delete)
+- `/api/admin-users/audit-logs`
+
+**Test Case 1**: First-time setup (owner account creation)
+```python
+# Check if setup is needed
+response = requests.get(f"{API_URL}/api/admin-users/setup/status")
+status = response.json()
+
+if status["needs_setup"]:
+    # Create owner account
+    response = requests.post(
+        f"{API_URL}/api/admin-users/setup",
+        json={
+            "email": "admin@example.com",
+            "display_name": "Admin User",
+            "password": "SecurePassword123!"
+        }
+    )
+    jwt_token = response.json()["access_token"]
+```
+
+**Test Case 2**: Login and JWT authentication
+```python
+# Login with email/password
+response = requests.post(
+    f"{API_URL}/api/admin-users/login",
+    json={
+        "email": "admin@example.com",
+        "password": "SecurePassword123!"
+    }
+)
+jwt_token = response.json()["access_token"]
+
+# Use JWT token for authenticated requests
+response = requests.get(
+    f"{API_URL}/api/admin-users/me",
+    headers={"Authorization": f"Bearer {jwt_token}"}
+)
+user = response.json()
+```
+
+**Test Case 3**: Dual authentication (JWT + Legacy)
+```python
+# Test with JWT Bearer token
+response = requests.get(
+    f"{API_URL}/api/organizations",
+    headers={"Authorization": f"Bearer {jwt_token}"}
+)
+
+# Test with legacy X-Admin-Key
+response = requests.get(
+    f"{API_URL}/api/organizations",
+    headers={"X-Admin-Key": MASTER_KEY}
+)
+```
+
+**Test Case 4**: Role-based access control
+```python
+# Owner can create admin users
+response = requests.post(
+    f"{API_URL}/api/admin-users",
+    headers={"Authorization": f"Bearer {owner_token}"},
+    json={
+        "email": "newadmin@example.com",
+        "display_name": "New Admin",
+        "password": "SecurePass456!",
+        "role": "admin"
+    }
+)
+```
+
+**Test Case 5**: Security validation
+```python
+# Request without authentication - should fail
+response = requests.get(f"{API_URL}/api/admin-users")
+assert response.status_code == 401
+
+# Request with invalid token - should fail
+response = requests.get(
+    f"{API_URL}/api/admin-users",
+    headers={"Authorization": "Bearer invalid-token"}
+)
+assert response.status_code == 401
+
+# Request with valid token - should succeed
+response = requests.get(
+    f"{API_URL}/api/admin-users",
+    headers={"Authorization": f"Bearer {valid_token}"}
+)
+assert response.status_code == 200
+```
+
+**Validations**:
+- Setup creates first owner account successfully
+- Login returns valid JWT token
+- JWT tokens authenticate properly
+- Legacy X-Admin-Key still works (backward compatibility)
+- Both auth methods work on dual-auth endpoints
+- JWT-only endpoints reject X-Admin-Key
+- Role-based permissions enforced correctly
+- Invalid/missing authentication rejected with 401
+- Session tracking and audit logging working
+- Password security (hashing, minimum length)
 
 ### Organization Management
 

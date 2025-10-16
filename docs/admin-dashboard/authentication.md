@@ -593,6 +593,27 @@ Check audit logs to see if X-Admin-Key is still being used:
 # Legacy requests have no user_id in logs
 ```
 
+## Testing
+
+The JWT authentication system has been thoroughly tested with comprehensive integration tests:
+
+**Test Script**: `scripts/test_jwt_integration.py`
+
+**What's Tested**:
+- Setup/login flows
+- JWT and legacy authentication
+- Dual auth on all endpoints
+- Role-based access control
+- Security features
+- Session management
+- Audit logging
+
+**Test Results**: All 12 integration tests passed (100% success rate)
+
+For detailed test information, see:
+- **[Integration Tests Documentation](../testing/integration-tests.md)** - How to run the tests
+- **[Integration Test Results](../INTEGRATION_TEST_RESULTS.md)** - Detailed test results
+
 ## Next Steps
 
 Now that you understand admin authentication:
@@ -608,3 +629,4 @@ Now that you understand admin authentication:
 - **[Environment Variables Guide](../deployment/environment-variables.md)** - Complete env var reference
 - **[Team Authentication](../integration/authentication.md)** - How teams authenticate (different from admin)
 - **[API Reference: Admin Users](../api-reference/admin-users.md)** - Complete API documentation
+- **[Integration Tests](../testing/integration-tests.md)** - Testing the authentication system
