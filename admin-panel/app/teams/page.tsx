@@ -144,12 +144,18 @@ export default function TeamsPage() {
                           <TableCell className="font-mono text-sm">{team.team_id}</TableCell>
                           <TableCell className="font-medium">{team.team_alias}</TableCell>
                           <TableCell>{team.organization_id}</TableCell>
-                          <TableCell className="font-mono text-sm">{team.virtual_key}</TableCell>
-                          <TableCell>{team.credits.credits_used.toLocaleString()}</TableCell>
+                          <TableCell className="font-mono text-sm">{team.virtual_key || 'N/A'}</TableCell>
                           <TableCell>
-                            <span className="font-semibold text-green-600">
-                              {team.credits.credits_remaining.toLocaleString()}
-                            </span>
+                            {team.credits?.credits_used?.toLocaleString() ?? 'N/A'}
+                          </TableCell>
+                          <TableCell>
+                            {team.credits?.credits_remaining !== undefined ? (
+                              <span className="font-semibold text-green-600">
+                                {team.credits.credits_remaining.toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">N/A</span>
+                            )}
                           </TableCell>
                         </TableRow>
                       ))}
