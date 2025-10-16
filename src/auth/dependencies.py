@@ -3,17 +3,20 @@ Authentication dependencies for FastAPI endpoints
 """
 from fastapi import Header, HTTPException, Depends
 from sqlalchemy.orm import Session
-from typing import Optional
+from typing import Optional, Union
+from datetime import datetime
 from ..models.credits import TeamCredits
+from ..models.admin_users import AdminUser, AdminSession
 from ..models.job_tracking import get_db
 from ..config.settings import settings
+from ..auth.utils import decode_access_token, extract_bearer_token, create_token_hash
 
 
 async def verify_admin_key(
     x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key")
 ) -> None:
     """
-    Verify admin API key for management endpoints.
+    Verify admin API key for management endpoints (Legacy).
 
     Expects X-Admin-Key header with the MASTER_KEY from settings.
 
@@ -37,6 +40,62 @@ async def verify_admin_key(
             status_code=401,
             detail="Invalid admin API key"
         )
+
+
+async def verify_admin_auth(
+    authorization: Optional[str] = Header(None),
+    x_admin_key: Optional[str] = Header(None, alias="X-Admin-Key"),
+    db: Session = Depends(get_db)
+) -> Union[AdminUser, None]:
+    """
+    Verify admin authentication via JWT token or legacy X-Admin-Key.
+
+    Supports two authentication methods:
+    1. JWT Bearer token (preferred): Authorization: Bearer <token>
+    2. Legacy X-Admin-Key header (backward compatibility): X-Admin-Key: <master_key>
+
+    Returns:
+        AdminUser if JWT authentication is used, None if X-Admin-Key is used
+
+    Raises:
+        HTTPException: 401 if authentication fails
+    """
+    # Try JWT authentication first (preferred method)
+    if authorization:
+        token = extract_bearer_token(authorization)
+        if token:
+            # Decode token
+            payload = decode_access_token(token)
+            if payload:
+                user_id = payload.get("user_id")
+                if user_id:
+                    # Check if session is valid
+                    token_hash = create_token_hash(token)
+                    session = db.query(AdminSession).filter(
+                        AdminSession.token_hash == token_hash,
+                        AdminSession.is_revoked == False,
+                        AdminSession.expires_at > datetime.utcnow()
+                    ).first()
+
+                    if session:
+                        # Get user
+                        user = db.query(AdminUser).filter(
+                            AdminUser.user_id == user_id,
+                            AdminUser.is_active == True
+                        ).first()
+
+                        if user:
+                            return user
+
+    # Fall back to X-Admin-Key authentication (legacy)
+    if x_admin_key and x_admin_key == settings.master_key:
+        return None  # Valid legacy auth, but no user object
+
+    # Neither authentication method succeeded
+    raise HTTPException(
+        status_code=401,
+        detail="Authentication required. Provide either 'Authorization: Bearer <token>' or 'X-Admin-Key: <master_key>'"
+    )
 
 
 async def verify_virtual_key(

@@ -7,7 +7,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 from ..services.credit_manager import get_credit_manager, InsufficientCreditsError
 from ..models.job_tracking import get_db
-from ..auth.dependencies import verify_virtual_key, verify_admin_key
+from ..auth.dependencies import verify_virtual_key, verify_admin_auth
 
 router = APIRouter(prefix="/api/credits", tags=["credits"])
 
@@ -54,12 +54,12 @@ async def add_credits(
     team_id: str,
     request: AddCreditsRequest,
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Add credits to a team's balance. ADMIN ONLY.
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
 
     credit_manager = get_credit_manager(db)

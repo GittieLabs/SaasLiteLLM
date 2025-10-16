@@ -10,7 +10,7 @@ from ..models.credits import TeamCredits
 from ..services.credit_manager import get_credit_manager
 from ..services.litellm_service import get_litellm_service, LiteLLMServiceError
 from ..models.job_tracking import get_db
-from ..auth.dependencies import verify_admin_key
+from ..auth.dependencies import verify_admin_auth
 import logging
 
 logger = logging.getLogger(__name__)
@@ -40,16 +40,62 @@ class TeamResponse(BaseModel):
 
 
 # Endpoints
+@router.get("")
+async def list_teams(
+    db: Session = Depends(get_db),
+    _ = Depends(verify_admin_auth)
+):
+    """
+    List all teams.
+
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
+
+    NOTE: This endpoint returns sensitive data including virtual_keys.
+    MUST be protected with admin authentication.
+    """
+    teams = db.query(TeamCredits).all()
+
+    result = []
+    for team_credits in teams:
+        # Get assigned model groups
+        assignments = db.query(TeamModelGroup).filter(
+            TeamModelGroup.team_id == team_credits.team_id
+        ).all()
+
+        model_groups = []
+        for assignment in assignments:
+            group = db.query(ModelGroup).filter(
+                ModelGroup.model_group_id == assignment.model_group_id
+            ).first()
+            if group:
+                model_groups.append(group.group_name)
+
+        result.append({
+            "team_id": team_credits.team_id,
+            "organization_id": team_credits.organization_id,
+            "credits_allocated": team_credits.credits_allocated,
+            "credits_remaining": team_credits.credits_remaining,
+            "credits_used": team_credits.credits_used,
+            "model_groups": model_groups,
+            "virtual_key": team_credits.virtual_key,  # SENSITIVE - admin only!
+            "credit_limit": team_credits.credit_limit,
+            "auto_refill": team_credits.auto_refill,
+            "created_at": team_credits.created_at.isoformat() if team_credits.created_at else None
+        })
+
+    return result
+
+
 @router.post("/create", response_model=TeamResponse)
 async def create_team(
     request: TeamCreateRequest,
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Create a new team with model groups, credits, and LiteLLM integration.
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     # Verify organization exists
     from ..models.organizations import Organization
@@ -185,12 +231,12 @@ async def create_team(
 async def get_team(
     team_id: str,
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Get team details.
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     # Get credits
     credits = db.query(TeamCredits).filter(
@@ -229,12 +275,12 @@ async def assign_model_groups(
     team_id: str,
     model_groups: List[str],
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Assign model groups to a team (replaces existing assignments).
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     # Verify team exists
     credits = db.query(TeamCredits).filter(

@@ -24,7 +24,7 @@ from ..auth.utils import (
     decode_access_token,
     extract_bearer_token
 )
-from ..auth.dependencies import verify_admin_key
+# No longer needed - using get_current_user and require_owner_or_admin instead
 from ..config.settings import settings
 
 router = APIRouter(prefix="/api/admin-users", tags=["admin-users"])

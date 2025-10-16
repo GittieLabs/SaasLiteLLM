@@ -7,7 +7,7 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 from ..models.organizations import Organization
 from ..models.job_tracking import Job, get_db
-from ..auth.dependencies import verify_admin_key
+from ..auth.dependencies import verify_admin_auth
 
 router = APIRouter(prefix="/api/organizations", tags=["organizations"])
 
@@ -29,16 +29,33 @@ class OrganizationResponse(BaseModel):
 
 
 # Endpoints
+@router.get("", response_model=list)
+async def list_organizations(
+    db: Session = Depends(get_db),
+    _ = Depends(verify_admin_auth)
+):
+    """
+    List all organizations.
+
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
+    """
+    orgs = db.query(Organization).filter(
+        Organization.status == "active"
+    ).all()
+
+    return [OrganizationResponse(**org.to_dict()) for org in orgs]
+
+
 @router.post("/create", response_model=OrganizationResponse)
 async def create_organization(
     request: OrganizationCreateRequest,
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Create a new organization.
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     # Check if organization already exists
     existing = db.query(Organization).filter(
@@ -69,12 +86,12 @@ async def create_organization(
 async def get_organization(
     organization_id: str,
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Get organization details.
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     org = db.query(Organization).filter(
         Organization.organization_id == organization_id
@@ -93,12 +110,12 @@ async def get_organization(
 async def list_organization_teams(
     organization_id: str,
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     List all teams in an organization.
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     # Verify organization exists
     org = db.query(Organization).filter(
@@ -130,12 +147,12 @@ async def get_organization_usage(
     organization_id: str,
     period: str,  # e.g., "2025-10"
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Get organization-wide usage for a period.
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     # Verify organization exists
     org = db.query(Organization).filter(

@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 import uuid
 from ..models.model_groups import ModelGroup, ModelGroupModel, TeamModelGroup
 from ..models.job_tracking import get_db
-from ..auth.dependencies import verify_virtual_key, verify_admin_key
+from ..auth.dependencies import verify_virtual_key, verify_admin_auth
 
 router = APIRouter(prefix="/api/model-groups", tags=["model-groups"])
 
@@ -40,12 +40,12 @@ class ModelGroupResponse(BaseModel):
 async def create_model_group(
     request: ModelGroupCreateRequest,
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Create a new model group (e.g., ResumeAgent, ParsingAgent).
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     # Check if group name already exists
     existing = db.query(ModelGroup).filter(
@@ -92,10 +92,13 @@ async def create_model_group(
 
 @router.get("", response_model=List[ModelGroupResponse])
 async def list_model_groups(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _ = Depends(verify_admin_auth)
 ):
     """
-    List all model groups
+    List all model groups.
+
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     groups = db.query(ModelGroup).filter(
         ModelGroup.status == "active"
@@ -147,12 +150,12 @@ async def update_model_group_models(
     group_name: str,
     models: List[ModelConfig],
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Update models in a model group (replaces all existing models).
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     group = db.query(ModelGroup).filter(
         ModelGroup.group_name == group_name
@@ -191,12 +194,12 @@ async def update_model_group_models(
 async def delete_model_group(
     group_name: str,
     db: Session = Depends(get_db),
-    _: None = Depends(verify_admin_key)
+    _ = Depends(verify_admin_auth)
 ):
     """
     Delete a model group.
 
-    Requires: X-Admin-Key header with MASTER_KEY
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
     """
     group = db.query(ModelGroup).filter(
         ModelGroup.group_name == group_name
