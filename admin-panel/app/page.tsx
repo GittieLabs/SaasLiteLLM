@@ -5,6 +5,7 @@ import Sidebar from '@/components/Sidebar';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Building2, Users, Layers, DollarSign } from 'lucide-react';
+import { api } from '@/lib/api-client';
 
 export default function DashboardPage() {
   const [stats, setStats] = useState({
@@ -13,15 +14,39 @@ export default function DashboardPage() {
     modelGroups: 0,
     totalCredits: 0,
   });
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Mock stats - in production, fetch from API
-    setStats({
-      organizations: 12,
-      teams: 45,
-      modelGroups: 8,
-      totalCredits: 15000,
-    });
+    async function fetchStats() {
+      try {
+        setLoading(true);
+
+        // Fetch real data from API
+        const [orgs, teams, modelGroups] = await Promise.all([
+          api.getOrganizations().catch(() => []),
+          api.getTeams().catch(() => []),
+          api.getModelGroups().catch(() => []),
+        ]);
+
+        // Calculate total credits from all teams
+        const totalCredits = teams.reduce((sum: number, team: any) => {
+          return sum + (team.credits_allocated || 0);
+        }, 0);
+
+        setStats({
+          organizations: orgs.length,
+          teams: teams.length,
+          modelGroups: modelGroups.length,
+          totalCredits,
+        });
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchStats();
   }, []);
 
   return (
@@ -43,7 +68,9 @@ export default function DashboardPage() {
                   <Building2 className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{stats.organizations}</div>
+                  <div className="text-2xl font-bold">
+                    {loading ? '...' : stats.organizations}
+                  </div>
                   <p className="text-xs text-muted-foreground">Active organizations</p>
                 </CardContent>
               </Card>
@@ -54,7 +81,9 @@ export default function DashboardPage() {
                   <Users className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{stats.teams}</div>
+                  <div className="text-2xl font-bold">
+                    {loading ? '...' : stats.teams}
+                  </div>
                   <p className="text-xs text-muted-foreground">Total teams</p>
                 </CardContent>
               </Card>
@@ -65,7 +94,9 @@ export default function DashboardPage() {
                   <Layers className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{stats.modelGroups}</div>
+                  <div className="text-2xl font-bold">
+                    {loading ? '...' : stats.modelGroups}
+                  </div>
                   <p className="text-xs text-muted-foreground">Configured groups</p>
                 </CardContent>
               </Card>
@@ -76,42 +107,27 @@ export default function DashboardPage() {
                   <DollarSign className="h-4 w-4 text-muted-foreground" />
                 </CardHeader>
                 <CardContent>
-                  <div className="text-2xl font-bold">{stats.totalCredits.toLocaleString()}</div>
+                  <div className="text-2xl font-bold">
+                    {loading ? '...' : stats.totalCredits.toLocaleString()}
+                  </div>
                   <p className="text-xs text-muted-foreground">Allocated credits</p>
                 </CardContent>
               </Card>
             </div>
 
-            <div className="mt-8">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>Latest changes in your system</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center">
-                      <div className="ml-4 space-y-1">
-                        <p className="text-sm font-medium leading-none">New organization created</p>
-                        <p className="text-sm text-muted-foreground">Acme Corp - 2 hours ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="ml-4 space-y-1">
-                        <p className="text-sm font-medium leading-none">Team credits updated</p>
-                        <p className="text-sm text-muted-foreground">Engineering Team - 5 hours ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="ml-4 space-y-1">
-                        <p className="text-sm font-medium leading-none">Model group configured</p>
-                        <p className="text-sm text-muted-foreground">GPT-4 Group - 1 day ago</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
+            {loading && (
+              <div className="mt-8">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Loading...</CardTitle>
+                    <CardDescription>Fetching dashboard data</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-sm text-muted-foreground">Please wait...</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
           </div>
         </main>
       </div>
