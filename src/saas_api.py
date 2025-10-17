@@ -20,7 +20,7 @@ from .models.job_tracking import (
 )
 
 # Import new API routers
-from .api import organizations, model_groups, teams, credits, dashboard, models, model_access_groups
+from .api import organizations, model_groups, teams, credits, dashboard, models, model_access_groups, admin_users
 
 # Import authentication
 from .auth.dependencies import verify_virtual_key
@@ -40,6 +40,7 @@ app.add_middleware(
         "http://localhost:3001",  # Backup admin panel port
         "http://127.0.0.1:3002",
         "http://127.0.0.1:3001",
+        "https://saasllm-admin.usegittie.com",  # Production admin panel
     ],
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
@@ -47,6 +48,7 @@ app.add_middleware(
 )
 
 # Include new routers
+app.include_router(admin_users.router)
 app.include_router(organizations.router)
 app.include_router(model_groups.router)
 app.include_router(teams.router)
