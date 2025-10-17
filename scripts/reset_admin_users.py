@@ -14,13 +14,17 @@ Usage:
 import sys
 import os
 from pathlib import Path
+from sqlalchemy import create_engine, text
 
-# Add src to path
-sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
+# Get DATABASE_URL from environment
+database_url = os.environ.get('DATABASE_URL')
+if not database_url:
+    print("❌ Error: DATABASE_URL environment variable not set")
+    print("Set it using: export DATABASE_URL='postgresql://...'")
+    sys.exit(1)
 
-from sqlalchemy import text
-from config.settings import settings
-from models.job_tracking import engine
+# Create engine
+engine = create_engine(database_url)
 
 
 def reset_admin_users(confirm: bool = False):
