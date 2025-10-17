@@ -66,7 +66,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 async def startup_event():
     """Ensure database tables exist on startup"""
     # Import all models to ensure they're registered with Base
-    from .models import organizations, model_groups, credits
+    from .models import organizations, model_groups, credits, admin_users
 
     # Create all tables if they don't exist
     Base.metadata.create_all(bind=engine)

@@ -30,18 +30,26 @@ def hash_password(password: str) -> str:
     """
     Hash a password using bcrypt.
 
+    Bcrypt has a 72-byte limit. We truncate passwords to 72 bytes
+    to prevent errors while maintaining security.
+
     Args:
         password: Plain text password to hash
 
     Returns:
         Hashed password string
     """
-    return pwd_context.hash(password)
+    # Bcrypt has a 72-byte limit, truncate if necessary
+    password_bytes = password.encode('utf-8')[:72]
+    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+    return pwd_context.hash(password_truncated)
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     Verify a password against its hash.
+
+    Truncates password to 72 bytes to match hash_password behavior.
 
     Args:
         plain_password: Plain text password to verify
@@ -50,7 +58,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     Returns:
         True if password matches, False otherwise
     """
-    return pwd_context.verify(plain_password, hashed_password)
+    # Truncate to 72 bytes to match hash_password behavior
+    password_bytes = plain_password.encode('utf-8')[:72]
+    password_truncated = password_bytes.decode('utf-8', errors='ignore')
+    return pwd_context.verify(password_truncated, hashed_password)
 
 
 # JWT Token Functions
