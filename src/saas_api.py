@@ -40,7 +40,7 @@ app.add_middleware(
         "http://localhost:3001",  # Backup admin panel port
         "http://127.0.0.1:3002",
         "http://127.0.0.1:3001",
-        "https://saasllm-admin.usegittie.com",  # Production admin panel
+        "https://saaslitellm-admin.usegittie.com",  # Production admin panel
     ],
     allow_credentials=True,
     allow_methods=["*"],  # Allow all methods (GET, POST, PUT, DELETE, etc.)
