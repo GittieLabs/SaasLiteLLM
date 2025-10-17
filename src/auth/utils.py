@@ -8,13 +8,10 @@ from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 import hashlib
 
-from passlib.context import CryptContext
+import bcrypt
 from jose import JWTError, jwt
 
 from src.config.settings import settings
-
-# Password hashing context using bcrypt
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # JWT Configuration
 # In production, this should be a secure random string stored in environment variables
@@ -41,8 +38,13 @@ def hash_password(password: str) -> str:
     """
     # Bcrypt has a 72-byte limit, truncate if necessary
     password_bytes = password.encode('utf-8')[:72]
-    password_truncated = password_bytes.decode('utf-8', errors='ignore')
-    return pwd_context.hash(password_truncated)
+
+    # Generate salt and hash the password
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+
+    # Return as string for database storage
+    return hashed.decode('utf-8')
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
@@ -60,8 +62,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
     # Truncate to 72 bytes to match hash_password behavior
     password_bytes = plain_password.encode('utf-8')[:72]
-    password_truncated = password_bytes.decode('utf-8', errors='ignore')
-    return pwd_context.verify(password_truncated, hashed_password)
+    hashed_bytes = hashed_password.encode('utf-8')
+
+    # Check password against hash
+    return bcrypt.checkpw(password_bytes, hashed_bytes)
 
 
 # JWT Token Functions
