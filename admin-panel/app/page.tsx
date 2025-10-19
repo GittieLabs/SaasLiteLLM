@@ -91,37 +91,6 @@ export default function DashboardPage() {
                 </CardContent>
               </Card>
             </div>
-
-            <div className="mt-8">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Recent Activity</CardTitle>
-                  <CardDescription>Latest changes in your system</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex items-center">
-                      <div className="ml-4 space-y-1">
-                        <p className="text-sm font-medium leading-none">New organization created</p>
-                        <p className="text-sm text-muted-foreground">Acme Corp - 2 hours ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="ml-4 space-y-1">
-                        <p className="text-sm font-medium leading-none">Team credits updated</p>
-                        <p className="text-sm text-muted-foreground">Engineering Team - 5 hours ago</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center">
-                      <div className="ml-4 space-y-1">
-                        <p className="text-sm font-medium leading-none">Model group configured</p>
-                        <p className="text-sm text-muted-foreground">GPT-4 Group - 1 day ago</p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
           </div>
         </main>
       </div>
