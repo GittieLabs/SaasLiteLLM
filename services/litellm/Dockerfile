@@ -17,6 +17,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 # Start LiteLLM proxy
 # The base image ENTRYPOINT is docker/prod_entrypoint.sh which runs litellm
-# We just need to pass arguments via CMD
-# Use shell form to allow environment variable expansion
-CMD --config /app/config.yaml --port ${PORT:-4000} --detailed_debug
+# Override CMD to pass our arguments with PORT env var
+CMD ["sh", "-c", "exec /docker/prod_entrypoint.sh --config /app/config.yaml --port ${PORT:-4000} --detailed_debug"]
