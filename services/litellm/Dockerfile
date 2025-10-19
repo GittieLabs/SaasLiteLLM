@@ -11,10 +11,10 @@ COPY litellm_config.yaml /app/config.yaml
 # Expose port (Railway will use PORT env var)
 EXPOSE 4000
 
-# Health check
+# Health check - use PORT env var if available, fallback to 4000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:4000/health || exit 1
+    CMD curl -f http://localhost:${PORT:-4000}/health || exit 1
 
 # Start LiteLLM proxy
-# Railway provides PORT env var, but LiteLLM uses 4000 by default
-CMD ["--config", "/app/config.yaml", "--port", "4000", "--detailed_debug"]
+# Use Railway's PORT env var if provided, otherwise default to 4000
+CMD sh -c "litellm --config /app/config.yaml --port ${PORT:-4000} --detailed_debug"
