@@ -17,4 +17,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 
 # Start LiteLLM proxy
 # Use Railway's PORT env var if provided, otherwise default to 4000
-CMD sh -c "litellm --config /app/config.yaml --port ${PORT:-4000} --detailed_debug"
+CMD ["sh", "-c", "litellm --config /app/config.yaml --port ${PORT:-4000} --detailed_debug"]
