@@ -16,6 +16,9 @@ Learn how to create and manage teams - the primary way your clients access the S
 
 ## Creating a Team for a Client
 
+![Teams Management](../images/teams.png)
+*Teams management interface - create teams, manage credits, and virtual keys*
+
 ### Quick Start
 
 1. **Navigate to Teams** → Click "Create Team"

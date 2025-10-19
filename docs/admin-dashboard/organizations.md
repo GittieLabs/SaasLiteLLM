@@ -51,6 +51,9 @@ Organization
 
 ## Creating Organizations
 
+![Organizations Management](../images/organizations.png)
+*Organizations management interface - create and manage customer organizations*
+
 ### Via Admin Dashboard
 
 1. **Navigate to Organizations**

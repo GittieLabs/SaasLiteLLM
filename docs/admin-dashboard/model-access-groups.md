@@ -41,6 +41,9 @@ The team can now use models: `gpt-4`, `gpt-3.5-turbo`, `claude-3-opus`, `claude-
 
 ## Creating Model Access Groups
 
+![Model Access Groups](../images/model-access-groups.png)
+*Model Access Groups interface - control which models teams can access*
+
 ### Via Admin Dashboard
 
 1. **Navigate to Model Access**

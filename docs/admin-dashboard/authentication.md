@@ -32,6 +32,9 @@ The Admin Dashboard now uses **JWT (JSON Web Token) authentication** with role-b
 
 When no users exist, the setup endpoint allows creating the first owner account:
 
+![Admin Setup](../images/admin-setup.png)
+*First-time admin setup screen - create your owner account*
+
 **URL**: `POST /api/admin-users/setup`
 
 **No authentication required** (only works when no users exist)

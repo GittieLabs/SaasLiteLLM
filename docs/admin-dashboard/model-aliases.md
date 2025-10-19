@@ -43,6 +43,9 @@ response = await client.chat(
 
 ## Creating Model Aliases
 
+![Model Aliases](../images/model-alias.png)
+*Model Aliases interface - create user-facing model names with pricing*
+
 ### Via Admin Dashboard
 
 1. **Navigate to Model Aliases**

@@ -18,6 +18,32 @@ The Admin Dashboard provides a user-friendly interface for platform administrato
 
 **Access URL (Production):** https://your-admin-dashboard.com
 
+## Screenshots
+
+### First-Time Setup
+![Admin Setup](../images/admin-setup.png)
+*Create your first admin account with the owner role*
+
+### Dashboard Overview
+![Dashboard](../images/dashboard.png)
+*Monitor your LiteLLM infrastructure at a glance*
+
+### Organizations Management
+![Organizations](../images/organizations.png)
+*Create and manage customer organizations*
+
+### Teams Management
+![Teams](../images/teams.png)
+*Manage teams, credits, and virtual API keys*
+
+### Model Access Groups
+![Model Access Groups](../images/model-access-groups.png)
+*Control which models teams can access*
+
+### Model Aliases
+![Model Aliases](../images/model-alias.png)
+*Create semantic model names with pricing configuration*
+
 !!! info "Built on LiteLLM"
     The Admin Dashboard manages the SaaS layer built on top of [LiteLLM](https://docs.litellm.ai). It provides a UI for features like job-based cost tracking and multi-tenant architecture that SaaS LiteLLM adds to the core LiteLLM routing capabilities.
 
