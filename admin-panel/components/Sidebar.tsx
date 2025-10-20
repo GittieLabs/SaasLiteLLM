@@ -6,6 +6,7 @@ import { Building2, Users, Layers, LayoutDashboard, LogOut, Box, Shield } from '
 import { logout } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
@@ -26,8 +27,9 @@ export default function Sidebar() {
 
   return (
     <div className="flex h-screen w-64 flex-col bg-card border-r">
-      <div className="flex h-16 items-center border-b px-6">
+      <div className="flex h-16 items-center justify-between border-b px-6">
         <h1 className="text-xl font-bold">LiteLLM Admin</h1>
+        <ThemeToggle />
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">
