@@ -96,7 +96,7 @@ class JobCreateResponse(BaseModel):
 
 
 class LLMCallRequest(BaseModel):
-    model_group: str  # Name of model group (e.g., "ResumeAgent", "ParsingAgent")
+    model: str  # Model alias (e.g., "gpa-rag-chat") or model group (e.g., "ResumeAgent")
     messages: List[Dict[str, Any]]  # Changed to Any to support all message types
     purpose: Optional[str] = None
     temperature: Optional[float] = 0.7
@@ -330,7 +330,7 @@ async def make_llm_call(
     try:
         primary_model, fallback_models = model_resolver.resolve_model_group(
             team_id=job.team_id,
-            model_group_name=request.model_group
+            model_group_name=request.model
         )
     except ModelResolutionError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -338,8 +338,8 @@ async def make_llm_call(
     # Track this model group usage (add to list if not already there)
     if not job.model_groups_used:
         job.model_groups_used = []
-    if request.model_group not in job.model_groups_used:
-        job.model_groups_used.append(request.model_group)
+    if request.model not in job.model_groups_used:
+        job.model_groups_used.append(request.model)
         db.commit()
 
     # Call LiteLLM with resolved model
@@ -401,7 +401,7 @@ async def make_llm_call(
             job_id=job.job_id,
             litellm_request_id=litellm_response.get("id"),
             model_used=litellm_response.get("model", primary_model),
-            model_group_used=request.model_group,
+            model_group_used=request.model,
             resolved_model=primary_model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -409,7 +409,7 @@ async def make_llm_call(
             cost_usd=cost_usd,
             latency_ms=latency_ms,
             purpose=request.purpose,
-            request_data={"messages": request.messages, "model_group": request.model_group},
+            request_data={"messages": request.messages, "model": request.model},
             response_data=litellm_response
         )
 
@@ -427,7 +427,7 @@ async def make_llm_call(
             metadata={
                 "tokens_used": total_tokens,
                 "latency_ms": latency_ms,
-                "model_group": request.model_group
+                "model": request.model
             }
         )
 
@@ -435,10 +435,10 @@ async def make_llm_call(
         # Record failed call
         llm_call = LLMCall(
             job_id=job.job_id,
-            model_group_used=request.model_group,
+            model_group_used=request.model,
             purpose=request.purpose,
             error=str(e),
-            request_data={"messages": request.messages, "model_group": request.model_group}
+            request_data={"messages": request.messages, "model": request.model}
         )
         db.add(llm_call)
         db.commit()
@@ -505,7 +505,7 @@ async def make_llm_call_stream(
     try:
         primary_model, fallback_models = model_resolver.resolve_model_group(
             team_id=job.team_id,
-            model_group_name=request.model_group
+            model_group_name=request.model
         )
     except ModelResolutionError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -513,8 +513,8 @@ async def make_llm_call_stream(
     # Track model group usage
     if not job.model_groups_used:
         job.model_groups_used = []
-    if request.model_group not in job.model_groups_used:
-        job.model_groups_used.append(request.model_group)
+    if request.model not in job.model_groups_used:
+        job.model_groups_used.append(request.model)
         db.commit()
 
     # Create streaming generator
@@ -623,7 +623,7 @@ async def make_llm_call_stream(
                 job_id=job.job_id,
                 litellm_request_id=litellm_request_id,
                 model_used=primary_model,
-                model_group_used=request.model_group,
+                model_group_used=request.model,
                 resolved_model=primary_model,
                 prompt_tokens=accumulated_tokens["prompt"],
                 completion_tokens=accumulated_tokens["completion"],
@@ -631,7 +631,7 @@ async def make_llm_call_stream(
                 cost_usd=cost_usd,
                 latency_ms=latency_ms,
                 purpose=request.purpose,
-                request_data={"messages": request.messages, "model_group": request.model_group},
+                request_data={"messages": request.messages, "model": request.model},
                 response_data={"content": accumulated_content, "streaming": True}
             )
 
@@ -642,10 +642,10 @@ async def make_llm_call_stream(
             # Record failed call
             llm_call = LLMCall(
                 job_id=job.job_id,
-                model_group_used=request.model_group,
+                model_group_used=request.model,
                 purpose=request.purpose,
                 error=str(e),
-                request_data={"messages": request.messages, "model_group": request.model_group}
+                request_data={"messages": request.messages, "model": request.model}
             )
             db.add(llm_call)
             db.commit()
