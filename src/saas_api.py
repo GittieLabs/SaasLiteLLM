@@ -467,6 +467,8 @@ async def make_llm_call_stream(
     Requires: Authorization header with virtual API key
     """
     from fastapi.responses import StreamingResponse
+    from .models.credits import TeamCredits
+    from .services.model_resolver import ModelResolver, ModelResolutionError
 
     # Get job
     job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
@@ -498,8 +500,6 @@ async def make_llm_call_stream(
         db.commit()
 
     # Resolve model group to actual model
-    from .models.credits import TeamCredits
-    from .services.model_resolver import ModelResolver, ModelResolutionError
 
     model_resolver = ModelResolver(db)
     try:
