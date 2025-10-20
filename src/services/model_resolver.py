@@ -1,11 +1,13 @@
 """
 Model Group Resolution Service
 Resolves model group names (e.g., "ResumeAgent") to actual model names with fallbacks
+Also supports model alias resolution with access group verification
 """
 from typing import Optional, List, Tuple
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from ..models.model_groups import ModelGroup, ModelGroupModel, TeamModelGroup
+from ..models.model_aliases import ModelAlias, ModelAliasAccessGroup, TeamAccessGroup
 
 
 class ModelResolutionError(Exception):
@@ -16,12 +18,13 @@ class ModelResolutionError(Exception):
 class ModelResolver:
     """
     Service for resolving model group names to actual models
+    Also handles model alias resolution with access group verification
     """
 
     def __init__(self, db: Session):
         self.db = db
 
-    def verify_team_access(self, team_id: str, model_group_name: str) -> bool:
+    def verify_team_access_to_model_group(self, team_id: str, model_group_name: str) -> bool:
         """
         Verify that a team has access to a specific model group
         """
@@ -43,6 +46,38 @@ class ModelResolver:
 
         return assignment is not None
 
+    def verify_team_access_to_model_alias(self, team_id: str, model_alias_name: str) -> bool:
+        """
+        Verify that a team has access to a specific model alias via access groups
+        """
+        # Get model alias
+        model_alias = self.db.query(ModelAlias).filter(
+            ModelAlias.model_alias == model_alias_name
+        ).first()
+
+        if not model_alias:
+            return False
+
+        # Get all access groups that contain this model alias
+        alias_access_groups = self.db.query(ModelAliasAccessGroup).filter(
+            ModelAliasAccessGroup.model_alias_id == model_alias.id
+        ).all()
+
+        if not alias_access_groups:
+            # Model alias exists but not assigned to any access group
+            return False
+
+        # Get all access groups assigned to the team
+        team_access_groups = self.db.query(TeamAccessGroup).filter(
+            TeamAccessGroup.team_id == team_id
+        ).all()
+
+        team_access_group_ids = {tag.access_group_id for tag in team_access_groups}
+        alias_access_group_ids = {aag.access_group_id for aag in alias_access_groups}
+
+        # Check if there's any overlap (team has access to at least one of the model's access groups)
+        return bool(team_access_group_ids & alias_access_group_ids)
+
     def resolve_model_group(
         self,
         team_id: str,
@@ -50,12 +85,16 @@ class ModelResolver:
         include_fallbacks: bool = True
     ) -> Tuple[str, List[str]]:
         """
-        Resolve a model group name to the actual model name(s)
+        Resolve a model group name OR model alias to the actual model name(s)
+
+        This method now supports two resolution paths:
+        1. Model Groups: Named groups with fallback configurations (e.g., "ResumeAgent")
+        2. Model Aliases: Direct model names with access group permissions (e.g., "gpa-rag-chat")
 
         Args:
             team_id: Team requesting the model
-            model_group_name: Name of model group (e.g., "ResumeAgent")
-            include_fallbacks: Whether to include fallback models
+            model_group_name: Name of model group OR model alias
+            include_fallbacks: Whether to include fallback models (only for model groups)
 
         Returns:
             Tuple of (primary_model, [fallback_models])
@@ -63,8 +102,25 @@ class ModelResolver:
         Raises:
             ModelResolutionError: If resolution fails
         """
-        # Verify team has access to this model group
-        if not self.verify_team_access(team_id, model_group_name):
+        # First, try to resolve as a model alias
+        model_alias = self.db.query(ModelAlias).filter(
+            and_(
+                ModelAlias.model_alias == model_group_name,
+                ModelAlias.status == "active"
+            )
+        ).first()
+
+        if model_alias:
+            # This is a model alias - verify team has access via access groups
+            if not self.verify_team_access_to_model_alias(team_id, model_group_name):
+                raise ModelResolutionError(
+                    f"Team '{team_id}' does not have access to model alias '{model_group_name}'"
+                )
+            # Return the model alias directly (no fallbacks for model aliases)
+            return model_alias.model_alias, []
+
+        # If not a model alias, try to resolve as a model group
+        if not self.verify_team_access_to_model_group(team_id, model_group_name):
             raise ModelResolutionError(
                 f"Team '{team_id}' does not have access to model group '{model_group_name}'"
             )
