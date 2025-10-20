@@ -250,6 +250,7 @@ class LiteLLMService:
         provider: str,
         actual_model: str,
         access_groups: Optional[list] = None,
+        credential_name: Optional[str] = None,
         api_key: Optional[str] = None,
         api_base: Optional[str] = None,
         pricing: Optional[Dict] = None,
@@ -263,6 +264,7 @@ class LiteLLMService:
             provider: Provider name (e.g., "openai", "anthropic")
             actual_model: Real model name (e.g., "gpt-3.5-turbo")
             access_groups: List of model access group names
+            credential_name: Name of LiteLLM credential to use
             api_key: API key for the provider
             api_base: Custom API base URL
             pricing: Dict with input/output pricing per 1M tokens
@@ -278,6 +280,8 @@ class LiteLLMService:
             "model": f"{provider}/{actual_model}"
         }
 
+        if credential_name:
+            litellm_params["litellm_credential_name"] = credential_name
         if api_key:
             litellm_params["api_key"] = api_key
         if api_base:

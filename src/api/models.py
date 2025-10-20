@@ -27,6 +27,7 @@ class ModelCreateRequest(BaseModel):
     description: Optional[str] = None
     pricing_input: Optional[float] = Field(None, description="Cost per 1M input tokens")
     pricing_output: Optional[float] = Field(None, description="Cost per 1M output tokens")
+    credential_name: Optional[str] = Field(None, description="LiteLLM credential name to use")
     api_key: Optional[str] = Field(None, description="API key (optional, uses env if not provided)")
     api_base: Optional[str] = Field(None, description="Custom API base URL")
 
@@ -108,6 +109,7 @@ async def create_model(
             provider=request.provider,
             actual_model=request.actual_model,
             access_groups=request.access_groups,
+            credential_name=request.credential_name,
             api_key=request.api_key,
             api_base=request.api_base,
             pricing=pricing,

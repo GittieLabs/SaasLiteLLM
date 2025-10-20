@@ -27,6 +27,7 @@ export default function ModelsPage() {
     description: '',
     pricing_input: '',
     pricing_output: '',
+    credential_name: '',
     access_groups: [] as string[],
   });
 
@@ -86,6 +87,7 @@ export default function ModelsPage() {
       description: model.description || '',
       pricing_input: model.pricing_input?.toString() || '',
       pricing_output: model.pricing_output?.toString() || '',
+      credential_name: '',
       access_groups: model.access_groups || [],
     });
     setEditingModel(model.model_alias);
@@ -129,6 +131,7 @@ export default function ModelsPage() {
       description: '',
       pricing_input: '',
       pricing_output: '',
+      credential_name: '',
       access_groups: [],
     });
   };
@@ -244,6 +247,21 @@ export default function ModelsPage() {
                         />
                         <p className="text-xs text-muted-foreground">
                           Real model name from provider
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="credential_name">Credential Name (Optional)</Label>
+                        <Input
+                          id="credential_name"
+                          placeholder="e.g., openai_prod_key"
+                          value={formData.credential_name}
+                          onChange={(e) =>
+                            setFormData({ ...formData, credential_name: e.target.value })
+                          }
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Reference a credential stored in LiteLLM. Leave empty to use environment variables.
                         </p>
                       </div>
 
