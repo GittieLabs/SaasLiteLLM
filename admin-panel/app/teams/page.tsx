@@ -10,11 +10,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Edit, Eye, EyeOff, Copy, X, Pause, Play } from 'lucide-react';
-import { Team, ModelAccessGroup } from '@/types';
+import { Team, ModelAccessGroup, Organization } from '@/types';
 import { api } from '@/lib/api-client';
 
 export default function TeamsPage() {
   const [teams, setTeams] = useState<Team[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [accessGroups, setAccessGroups] = useState<ModelAccessGroup[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingTeam, setEditingTeam] = useState<string | null>(null);
@@ -37,16 +38,19 @@ export default function TeamsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [teamsData, groupsData] = await Promise.all([
+      const [teamsData, groupsData, orgsData] = await Promise.all([
         api.getTeams(),
         api.getModelAccessGroups(),
+        api.getOrganizations(),
       ]);
       setTeams(teamsData);
       setAccessGroups(groupsData);
+      setOrganizations(orgsData);
     } catch (error) {
       console.error('Failed to load data:', error);
       setTeams([]);
       setAccessGroups([]);
+      setOrganizations([]);
     } finally {
       setLoading(false);
     }
@@ -311,17 +315,27 @@ export default function TeamsPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="organization_id">Organization ID *</Label>
-                        <Input
+                        <Label htmlFor="organization_id">Organization *</Label>
+                        <select
                           id="organization_id"
-                          placeholder="e.g., org-1"
                           value={formData.organization_id}
                           onChange={(e) =>
                             setFormData({ ...formData, organization_id: e.target.value })
                           }
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                           required
                           disabled={!!editingTeam}
-                        />
+                        >
+                          <option value="">Select an organization...</option>
+                          {organizations.map((org) => (
+                            <option key={org.organization_id} value={org.organization_id}>
+                              {org.organization_id} ({org.name})
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          Select the organization this team belongs to
+                        </p>
                       </div>
                     </div>
 
