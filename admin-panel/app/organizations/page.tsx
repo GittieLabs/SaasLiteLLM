@@ -10,11 +10,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Plus } from 'lucide-react';
+import { Plus, Activity } from 'lucide-react';
 import { Organization } from '@/types';
 import { api } from '@/lib/api-client';
+import { useRouter } from 'next/navigation';
 
 export default function OrganizationsPage() {
+  const router = useRouter();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -246,6 +248,7 @@ export default function OrganizationsPage() {
                         <TableHead>Name</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead>Created</TableHead>
+                        <TableHead className="text-right">Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -259,6 +262,16 @@ export default function OrganizationsPage() {
                             </span>
                           </TableCell>
                           <TableCell>{new Date(org.created_at).toLocaleDateString()}</TableCell>
+                          <TableCell className="text-right">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/jobs/organizations/${org.organization_id}`)}
+                              title="View organization analytics"
+                            >
+                              <Activity className="h-4 w-4 text-blue-500" />
+                            </Button>
+                          </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>

@@ -9,11 +9,13 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Plus, Trash2, Edit, Eye, EyeOff, Copy, X, Pause, Play } from 'lucide-react';
+import { Plus, Trash2, Edit, Eye, EyeOff, Copy, X, Pause, Play, Activity } from 'lucide-react';
 import { Team, ModelAccessGroup, Organization } from '@/types';
 import { api } from '@/lib/api-client';
+import { useRouter } from 'next/navigation';
 
 export default function TeamsPage() {
+  const router = useRouter();
   const [teams, setTeams] = useState<Team[]>([]);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [accessGroups, setAccessGroups] = useState<ModelAccessGroup[]>([]);
@@ -612,6 +614,14 @@ export default function TeamsPage() {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex gap-1 justify-end">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => router.push(`/jobs/teams/${team.team_id}`)}
+                                  title="View jobs"
+                                >
+                                  <Activity className="h-4 w-4 text-blue-500" />
+                                </Button>
                                 <Button
                                   variant="ghost"
                                   size="sm"
