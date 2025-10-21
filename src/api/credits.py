@@ -430,3 +430,80 @@ async def configure_auto_refill(
         "last_refill_at": team_credits.last_refill_at.isoformat() if team_credits.last_refill_at else None,
         "message": f"Auto-refill {'enabled' if request.enabled else 'disabled'} successfully"
     }
+
+
+class UpdateBudgetModeRequest(BaseModel):
+    """Request model for updating budget mode"""
+    budget_mode: str  # 'job_based', 'consumption_usd', 'consumption_tokens'
+    credits_per_dollar: Optional[float] = None
+    tokens_per_credit: Optional[int] = None
+
+
+@router.patch("/teams/{team_id}/budget-mode")
+async def update_budget_mode(
+    team_id: str,
+    request: UpdateBudgetModeRequest,
+    db: Session = Depends(get_db),
+    _ = Depends(verify_admin_auth)
+):
+    """
+    Update team's budget mode configuration. ADMIN ONLY.
+
+    Budget modes:
+    - job_based: 1 credit per job (regardless of tokens or cost)
+    - consumption_usd: Credits based on actual USD cost
+    - consumption_tokens: Credits based on token usage
+
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
+    """
+    from ..models.credits import TeamCredits
+
+    # Validate budget_mode
+    valid_modes = ['job_based', 'consumption_usd', 'consumption_tokens']
+    if request.budget_mode not in valid_modes:
+        raise HTTPException(
+            status_code=400,
+            detail=f"budget_mode must be one of: {', '.join(valid_modes)}"
+        )
+
+    # Get team credits
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == team_id
+    ).first()
+
+    if not team_credits:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team '{team_id}' not found"
+        )
+
+    # Update budget mode
+    team_credits.budget_mode = request.budget_mode
+
+    # Update conversion rates if provided
+    if request.credits_per_dollar is not None:
+        if request.credits_per_dollar <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="credits_per_dollar must be a positive number"
+            )
+        team_credits.credits_per_dollar = request.credits_per_dollar
+
+    if request.tokens_per_credit is not None:
+        if request.tokens_per_credit <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="tokens_per_credit must be a positive integer"
+            )
+        team_credits.tokens_per_credit = request.tokens_per_credit
+
+    db.commit()
+    db.refresh(team_credits)
+
+    return {
+        "team_id": team_id,
+        "budget_mode": team_credits.budget_mode,
+        "credits_per_dollar": float(team_credits.credits_per_dollar) if team_credits.credits_per_dollar else None,
+        "tokens_per_credit": team_credits.tokens_per_credit,
+        "message": "Budget mode updated successfully"
+    }

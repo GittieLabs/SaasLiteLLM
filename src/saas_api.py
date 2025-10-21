@@ -580,8 +580,9 @@ async def make_llm_call_stream(
         job.model_groups_used.append(request.model)
         db.commit()
 
-    # Capture virtual_key before generator to avoid DetachedInstanceError
+    # Capture virtual_key and team_id before generator to avoid DetachedInstanceError
     virtual_key_value = team_credits.virtual_key
+    team_id_value = job.team_id
 
     # Create streaming generator
     async def stream_llm_response():
@@ -597,7 +598,7 @@ async def make_llm_call_stream(
             "messages": request.messages,
             "temperature": request.temperature,
             "stream": True,  # Enable streaming
-            "user": job.team_id,
+            "user": team_id_value,
         }
 
         # Add optional parameters
@@ -1013,8 +1014,8 @@ async def complete_job(
             detail="Job does not belong to your team"
         )
 
-    # Update job status
-    job.status = JobStatus(request.status)
+    # Update job status (convert to uppercase for enum)
+    job.status = JobStatus(request.status.upper())
     job.completed_at = datetime.utcnow()
     if request.error_message:
         job.error_message = request.error_message
