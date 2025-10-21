@@ -155,3 +155,104 @@ async def check_credits(
             "error": str(e),
             "credits_needed": credits_needed
         }
+
+
+class UpdateConversionRatesRequest(BaseModel):
+    """Request model for updating team-specific conversion rates"""
+    tokens_per_credit: Optional[int] = None
+    credits_per_dollar: Optional[float] = None
+
+
+@router.patch("/teams/{team_id}/conversion-rates")
+async def update_conversion_rates(
+    team_id: str,
+    request: UpdateConversionRatesRequest,
+    db: Session = Depends(get_db),
+    _ = Depends(verify_admin_auth)
+):
+    """
+    Update team-specific conversion rates for credit calculations. ADMIN ONLY.
+
+    - tokens_per_credit: Number of tokens equivalent to 1 credit (for consumption_tokens mode)
+    - credits_per_dollar: Number of credits per dollar (for consumption_usd mode)
+
+    If not set or set to None, the system will use default values.
+
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
+    """
+    from ..models.credits import TeamCredits
+
+    # Get team credits
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == team_id
+    ).first()
+
+    if not team_credits:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team '{team_id}' not found"
+        )
+
+    # Validate values
+    if request.tokens_per_credit is not None:
+        if request.tokens_per_credit <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="tokens_per_credit must be a positive integer"
+            )
+        team_credits.tokens_per_credit = request.tokens_per_credit
+
+    if request.credits_per_dollar is not None:
+        if request.credits_per_dollar <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="credits_per_dollar must be a positive number"
+            )
+        team_credits.credits_per_dollar = request.credits_per_dollar
+
+    db.commit()
+    db.refresh(team_credits)
+
+    return {
+        "team_id": team_id,
+        "tokens_per_credit": team_credits.tokens_per_credit,
+        "credits_per_dollar": float(team_credits.credits_per_dollar) if team_credits.credits_per_dollar else None,
+        "message": "Conversion rates updated successfully"
+    }
+
+
+@router.get("/teams/{team_id}/conversion-rates")
+async def get_conversion_rates(
+    team_id: str,
+    db: Session = Depends(get_db),
+    _ = Depends(verify_admin_auth)
+):
+    """
+    Get team-specific conversion rates for credit calculations. ADMIN ONLY.
+
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
+    """
+    from ..models.credits import TeamCredits
+    from ..api.constants import DEFAULT_TOKENS_PER_CREDIT, DEFAULT_CREDITS_PER_DOLLAR
+
+    # Get team credits
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == team_id
+    ).first()
+
+    if not team_credits:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team '{team_id}' not found"
+        )
+
+    return {
+        "team_id": team_id,
+        "tokens_per_credit": team_credits.tokens_per_credit if team_credits.tokens_per_credit else DEFAULT_TOKENS_PER_CREDIT,
+        "credits_per_dollar": float(team_credits.credits_per_dollar) if team_credits.credits_per_dollar else DEFAULT_CREDITS_PER_DOLLAR,
+        "budget_mode": team_credits.budget_mode,
+        "using_defaults": {
+            "tokens_per_credit": team_credits.tokens_per_credit is None,
+            "credits_per_dollar": team_credits.credits_per_dollar is None
+        }
+    }

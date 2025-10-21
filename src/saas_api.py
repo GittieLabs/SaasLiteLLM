@@ -913,7 +913,9 @@ async def create_and_call_job(
                 credits_to_deduct = int(costs["total_cost_usd"] * credits_per_dollar)
                 credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, credits_to_deduct)
             elif team_credits.budget_mode == "consumption_tokens":
-                credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, costs["total_tokens"] // DEFAULT_TOKENS_PER_CREDIT)
+                # Use team-specific tokens_per_credit if available, otherwise use default
+                tokens_per_credit = team_credits.tokens_per_credit if team_credits.tokens_per_credit else DEFAULT_TOKENS_PER_CREDIT
+                credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, costs["total_tokens"] // tokens_per_credit)
 
             credit_manager.deduct_credit(
                 team_id=job.team_id,
@@ -1032,8 +1034,9 @@ async def complete_job(
                 credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, credits_to_deduct)
             elif team_credits.budget_mode == "consumption_tokens":
                 # Credits based on tokens used
-                # Use default tokens per credit (10,000)
-                credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, costs["total_tokens"] // DEFAULT_TOKENS_PER_CREDIT)
+                # Use team-specific tokens_per_credit if available, otherwise use default
+                tokens_per_credit = team_credits.tokens_per_credit if team_credits.tokens_per_credit else DEFAULT_TOKENS_PER_CREDIT
+                credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, costs["total_tokens"] // tokens_per_credit)
             # else: job_based mode, use MINIMUM_CREDITS_PER_JOB (1 credit)
 
             # Deduct credits

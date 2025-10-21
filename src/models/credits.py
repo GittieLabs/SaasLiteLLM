@@ -29,6 +29,7 @@ class TeamCredits(Base):
     # Budget mode: how credits are deducted
     budget_mode = Column(String(50), default='job_based', nullable=False)  # 'job_based', 'consumption_usd', 'consumption_tokens'
     credits_per_dollar = Column(Numeric(10, 2), default=10.0)  # Conversion rate for consumption_usd mode
+    tokens_per_credit = Column(Integer, default=10000)  # Conversion rate for consumption_tokens mode
     status = Column(String(20), default='active', nullable=False)  # 'active', 'suspended', 'paused'
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -52,6 +53,7 @@ class TeamCredits(Base):
             "last_refill_at": self.last_refill_at.isoformat() if self.last_refill_at else None,
             "budget_mode": self.budget_mode,
             "credits_per_dollar": float(self.credits_per_dollar) if self.credits_per_dollar else 10.0,
+            "tokens_per_credit": self.tokens_per_credit if self.tokens_per_credit else 10000,
             "status": self.status,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None
