@@ -447,6 +447,253 @@ curl -X POST http://localhost:8003/api/jobs/{job_id}/complete \
 
 ---
 
+### Single-Call Job (Create, Call, and Complete)
+
+Create a job, make a single LLM call, and complete the job in one request. This is a convenience endpoint for simple workflows that only need one LLM call.
+
+**Endpoint:** `POST /api/jobs/create-and-call`
+
+**Authentication:** Required (virtual key)
+
+**Performance Benefits:**
+- ~66% latency reduction (1 API call vs 3)
+- Single network round-trip
+- Automatic job lifecycle management
+
+**Request Body:**
+
+```json
+{
+  "team_id": "acme-corp",
+  "job_type": "chat_response",
+  "model": "gpt-4",
+  "messages": [
+    {
+      "role": "user",
+      "content": "What is Python?"
+    }
+  ],
+  "user_id": "optional-user-id",
+  "job_metadata": {
+    "session_id": "sess_123"
+  },
+  "purpose": "chat",
+  "temperature": 0.7,
+  "max_tokens": 500
+}
+```
+
+**Request Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `team_id` | string | Yes | Team identifier (must match authenticated team) |
+| `job_type` | string | Yes | Type of job (e.g., "chat_response", "text_generation") |
+| `model` | string | Yes | Model alias or model group name |
+| `messages` | array | Yes | OpenAI-compatible messages array |
+| `user_id` | string | No | Optional user identifier for tracking |
+| `job_metadata` | object | No | Custom metadata for the job |
+| `purpose` | string | No | Optional label for the LLM call (e.g., "chat", "generation") |
+| `temperature` | number | No | Sampling temperature (0.0-2.0, default: 0.7) |
+| `max_tokens` | integer | No | Maximum tokens to generate |
+| `response_format` | object | No | Structured output format (e.g., {"type": "json_object"}) |
+| `tools` | array | No | Function calling tools |
+| `tool_choice` | any | No | Tool choice strategy ("auto", "none", or specific tool) |
+| `top_p` | number | No | Nucleus sampling parameter |
+| `frequency_penalty` | number | No | Frequency penalty (-2.0 to 2.0) |
+| `presence_penalty` | number | No | Presence penalty (-2.0 to 2.0) |
+| `stop` | array | No | Stop sequences |
+
+**Response (200 OK):**
+
+```json
+{
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "response": {
+    "content": "Python is a high-level programming language...",
+    "finish_reason": "stop"
+  },
+  "metadata": {
+    "tokens_used": 256,
+    "latency_ms": 1340,
+    "model": "gpt-4"
+  },
+  "costs": {
+    "total_calls": 1,
+    "successful_calls": 1,
+    "failed_calls": 0,
+    "total_tokens": 256,
+    "total_cost_usd": 0.0128,
+    "avg_latency_ms": 1340,
+    "credit_applied": true,
+    "credits_remaining": 999
+  },
+  "completed_at": "2025-10-14T12:00:05.340Z"
+}
+```
+
+**Response Fields:**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `job_id` | string (UUID) | Unique job identifier |
+| `status` | string | Always "completed" for successful calls |
+| `response.content` | string | The generated response content |
+| `response.finish_reason` | string | Why generation stopped: "stop", "length", or "content_filter" |
+| `metadata.tokens_used` | integer | Total tokens used (prompt + completion) |
+| `metadata.latency_ms` | integer | Call latency in milliseconds |
+| `metadata.model` | string | Model alias or group that was requested |
+| `costs` | object | Aggregated cost information |
+| `costs.credit_applied` | boolean | Whether a credit was deducted (always true for successful calls) |
+| `costs.credits_remaining` | integer | Credits remaining for the team |
+| `completed_at` | string (ISO 8601) | Job completion timestamp |
+
+**Example Request:**
+
+=== "cURL"
+
+    ```bash
+    curl -X POST http://localhost:8003/api/jobs/create-and-call \
+      -H "Authorization: Bearer sk-your-virtual-key" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "team_id": "acme-corp",
+        "job_type": "chat_response",
+        "model": "gpt-4",
+        "messages": [
+          {"role": "user", "content": "What is Python?"}
+        ],
+        "temperature": 0.7,
+        "max_tokens": 500
+      }'
+    ```
+
+=== "Python"
+
+    ```python
+    import requests
+
+    API_URL = "http://localhost:8003/api"
+    VIRTUAL_KEY = "sk-your-virtual-key"
+
+    headers = {
+        "Authorization": f"Bearer {VIRTUAL_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(
+        f"{API_URL}/jobs/create-and-call",
+        headers=headers,
+        json={
+            "team_id": "acme-corp",
+            "job_type": "chat_response",
+            "model": "gpt-4",
+            "messages": [
+                {"role": "user", "content": "What is Python?"}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 500
+        }
+    )
+
+    result = response.json()
+    print(f"Response: {result['response']['content']}")
+    print(f"Tokens used: {result['metadata']['tokens_used']}")
+    print(f"Credits remaining: {result['costs']['credits_remaining']}")
+    ```
+
+=== "JavaScript"
+
+    ```javascript
+    const API_URL = "http://localhost:8003/api";
+    const VIRTUAL_KEY = "sk-your-virtual-key";
+
+    const response = await fetch(`${API_URL}/jobs/create-and-call`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${VIRTUAL_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        team_id: 'acme-corp',
+        job_type: 'chat_response',
+        model: 'gpt-4',
+        messages: [
+          {role: 'user', content: 'What is Python?'}
+        ],
+        temperature: 0.7,
+        max_tokens: 500
+      })
+    });
+
+    const result = await response.json();
+    console.log(`Response: ${result.response.content}`);
+    console.log(`Tokens used: ${result.metadata.tokens_used}`);
+    console.log(`Credits remaining: ${result.costs.credits_remaining}`);
+    ```
+
+**When to Use This Endpoint:**
+
+✅ **Best for:**
+- Chat applications with single-turn responses
+- Simple text generation tasks
+- Quick question/answer scenarios
+- Any workflow with exactly one LLM call
+
+❌ **Not ideal for:**
+- Complex workflows requiring multiple LLM calls
+- Agentic workflows with branching logic
+- Batch processing multiple documents
+- Scenarios where you need to inspect intermediate results
+
+**Performance Comparison:**
+
+| Workflow Type | API Calls | Latency | Use Case |
+|--------------|-----------|---------|----------|
+| **Single-Call** | 1 | ~1.5s | Chat apps, simple tasks |
+| **Multi-Step** | 3+ | ~4.5s+ | Complex workflows |
+
+**Error Handling:**
+
+If the LLM call fails, the job is automatically marked as failed (no credit deducted):
+
+```python
+try:
+    response = requests.post(
+        f"{API_URL}/jobs/create-and-call",
+        headers=headers,
+        json={
+            "team_id": "acme-corp",
+            "job_type": "chat",
+            "model": "gpt-4",
+            "messages": messages
+        },
+        timeout=30
+    )
+    response.raise_for_status()
+    result = response.json()
+
+except requests.exceptions.HTTPError as e:
+    if e.response.status_code == 403:
+        print(f"Access error: {e.response.json()['detail']}")
+    elif e.response.status_code == 500:
+        print(f"LLM call failed: {e.response.json()['detail']}")
+except requests.exceptions.Timeout:
+    print("Request timed out")
+```
+
+**Error Responses:**
+
+| Status Code | Error | Description |
+|-------------|-------|-------------|
+| 401 | Unauthorized | Invalid or missing virtual key |
+| 403 | Forbidden | Virtual key does not belong to team, or model access denied |
+| 422 | Validation Error | Invalid request data |
+| 500 | Internal Server Error | LLM call failed (job marked as failed, no credit charged) |
+
+---
+
 ### Get Job Costs
 
 Get detailed cost breakdown for a job (internal analytics).
