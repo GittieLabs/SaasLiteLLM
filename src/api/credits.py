@@ -163,6 +163,21 @@ class UpdateConversionRatesRequest(BaseModel):
     credits_per_dollar: Optional[float] = None
 
 
+class ReplenishCreditsRequest(BaseModel):
+    """Request model for replenishing credits from payment"""
+    credits: int
+    payment_type: str  # 'subscription' or 'one_time'
+    payment_amount_usd: Optional[float] = None  # Actual USD amount paid
+    reason: Optional[str] = None
+
+
+class ConfigureAutoRefillRequest(BaseModel):
+    """Request model for configuring automatic credit refills"""
+    enabled: bool
+    refill_amount: Optional[int] = None
+    refill_period: Optional[str] = None  # 'monthly', 'weekly', 'daily'
+
+
 @router.patch("/teams/{team_id}/conversion-rates")
 async def update_conversion_rates(
     team_id: str,
@@ -255,4 +270,163 @@ async def get_conversion_rates(
             "tokens_per_credit": team_credits.tokens_per_credit is None,
             "credits_per_dollar": team_credits.credits_per_dollar is None
         }
+    }
+
+
+@router.post("/teams/{team_id}/replenish")
+async def replenish_credits(
+    team_id: str,
+    request: ReplenishCreditsRequest,
+    db: Session = Depends(get_db),
+    _ = Depends(verify_admin_auth)
+):
+    """
+    Replenish credits from a payment (subscription or one-time purchase). ADMIN ONLY.
+
+    This endpoint should be called after processing a payment to add credits to the team's balance.
+    Creates a transaction record with type 'subscription_payment' or 'one_time_payment'.
+
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
+    """
+    from ..models.credits import TeamCredits, CreditTransaction
+    from datetime import datetime
+
+    # Validate payment_type
+    if request.payment_type not in ['subscription', 'one_time']:
+        raise HTTPException(
+            status_code=400,
+            detail="payment_type must be 'subscription' or 'one_time'"
+        )
+
+    # Validate credits amount
+    if request.credits <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail="credits must be a positive integer"
+        )
+
+    # Get team credits
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == team_id
+    ).first()
+
+    if not team_credits:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team '{team_id}' not found"
+        )
+
+    # Record current balance
+    credits_before = team_credits.credits_allocated
+
+    # Add credits
+    team_credits.credits_allocated += request.credits
+
+    # Update last_refill_at for subscription payments
+    if request.payment_type == 'subscription':
+        team_credits.last_refill_at = datetime.utcnow()
+
+    # Create transaction record
+    transaction_type = f"{request.payment_type}_payment"
+    reason = request.reason or f"Credit replenishment from {request.payment_type} payment"
+
+    if request.payment_amount_usd:
+        reason += f" (${request.payment_amount_usd:.2f} USD)"
+
+    transaction = CreditTransaction(
+        team_id=team_id,
+        organization_id=team_credits.organization_id,
+        transaction_type=transaction_type,
+        credits_amount=request.credits,
+        credits_before=credits_before,
+        credits_after=team_credits.credits_allocated,
+        reason=reason
+    )
+
+    db.add(transaction)
+    db.commit()
+    db.refresh(team_credits)
+    db.refresh(transaction)
+
+    return {
+        "team_id": team_id,
+        "credits_added": request.credits,
+        "credits_before": credits_before,
+        "credits_after": team_credits.credits_allocated,
+        "payment_type": request.payment_type,
+        "payment_amount_usd": request.payment_amount_usd,
+        "transaction": transaction.to_dict()
+    }
+
+
+@router.post("/teams/{team_id}/configure-auto-refill")
+async def configure_auto_refill(
+    team_id: str,
+    request: ConfigureAutoRefillRequest,
+    db: Session = Depends(get_db),
+    _ = Depends(verify_admin_auth)
+):
+    """
+    Configure automatic credit refills for a team. ADMIN ONLY.
+
+    When enabled, credits will be automatically replenished at the specified interval.
+    This is typically tied to subscription billing cycles.
+
+    Requires: Admin authentication (JWT Bearer token or X-Admin-Key header)
+    """
+    from ..models.credits import TeamCredits
+
+    # Get team credits
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == team_id
+    ).first()
+
+    if not team_credits:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team '{team_id}' not found"
+        )
+
+    # Validate refill_period if provided
+    if request.enabled and request.refill_period:
+        if request.refill_period not in ['monthly', 'weekly', 'daily']:
+            raise HTTPException(
+                status_code=400,
+                detail="refill_period must be 'monthly', 'weekly', or 'daily'"
+            )
+
+    # Validate refill_amount if enabling
+    if request.enabled:
+        if request.refill_amount is None or request.refill_amount <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="refill_amount must be a positive integer when enabling auto-refill"
+            )
+        if request.refill_period is None:
+            raise HTTPException(
+                status_code=400,
+                detail="refill_period must be specified when enabling auto-refill"
+            )
+
+    # Update auto-refill configuration
+    team_credits.auto_refill = request.enabled
+
+    if request.enabled:
+        team_credits.refill_amount = request.refill_amount
+        team_credits.refill_period = request.refill_period
+    else:
+        # When disabling, we keep the settings but mark as disabled
+        team_credits.refill_amount = request.refill_amount if request.refill_amount else team_credits.refill_amount
+        team_credits.refill_period = request.refill_period if request.refill_period else team_credits.refill_period
+
+    db.commit()
+    db.refresh(team_credits)
+
+    return {
+        "team_id": team_id,
+        "auto_refill_enabled": team_credits.auto_refill,
+        "refill_amount": team_credits.refill_amount,
+        "refill_period": team_credits.refill_period,
+        "last_refill_at": team_credits.last_refill_at.isoformat() if team_credits.last_refill_at else None,
+        "message": f"Auto-refill {'enabled' if request.enabled else 'disabled'} successfully"
     }
