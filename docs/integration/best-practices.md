@@ -5,11 +5,113 @@ Learn best practices for building robust, secure, and cost-effective application
 ## Overview
 
 This guide covers:
+- **Workflow Selection** - Choose the right endpoint for your use case
 - **Performance Optimization** - Reduce latency and improve throughput
 - **Security Best Practices** - Protect your application and data
 - **Cost Optimization** - Minimize LLM costs
 - **Development Practices** - Write maintainable code
 - **Production Readiness** - Deploy with confidence
+
+## Workflow Selection
+
+### Choose the Right Endpoint
+
+SaaS LiteLLM offers two workflow patterns optimized for different use cases:
+
+#### 1. Single-Call Workflow (`/api/jobs/create-and-call`)
+
+**✅ Use When:**
+- Your workflow requires only ONE LLM call
+- You need minimal latency (chat apps, real-time responses)
+- Simplicity is important
+- You want automatic error handling
+
+**Example Use Cases:**
+```python
+# Chat applications
+response = requests.post(f"{API}/jobs/create-and-call", json={
+    "team_id": "acme-corp",
+    "job_type": "chat",
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": user_message}]
+})
+
+# Simple classification
+response = requests.post(f"{API}/jobs/create-and-call", json={
+    "team_id": "acme-corp",
+    "job_type": "sentiment_analysis",
+    "model": "gpt-3.5-turbo",
+    "messages": [{"role": "user", "content": f"Classify sentiment: {text}"}]
+})
+
+# Single-turn text generation
+response = requests.post(f"{API}/jobs/create-and-call", json={
+    "team_id": "acme-corp",
+    "job_type": "summarization",
+    "model": "gpt-4",
+    "messages": [{"role": "user", "content": f"Summarize: {document}"}]
+})
+```
+
+**Performance:** 1 API call ~1.5s
+
+#### 2. Multi-Step Workflow (Create → Call → Complete)
+
+**✅ Use When:**
+- Your workflow requires MULTIPLE LLM calls
+- You need granular control over each step
+- You want to track intermediate results
+- Building complex agentic workflows
+
+**Example Use Cases:**
+```python
+# Multi-step document analysis
+job_id = create_job("document_analysis")
+extract_text(job_id)      # Call 1
+classify_content(job_id)  # Call 2
+generate_summary(job_id)  # Call 3
+complete_job(job_id)
+
+# Agentic workflow with decisions
+job_id = create_job("research_agent")
+initial_response = llm_call(job_id, "Research topic X")
+if needs_more_info(initial_response):
+    deep_dive = llm_call(job_id, "Deep dive into...")
+final_report = llm_call(job_id, "Compile report from...")
+complete_job(job_id)
+
+# Batch processing with retry logic
+job_id = create_job("batch_processing")
+for item in items:
+    try:
+        llm_call(job_id, process_prompt(item))
+    except:
+        retry_with_fallback(job_id, item)
+complete_job(job_id)
+```
+
+**Performance:** 3+ API calls ~4.5s+
+
+### Decision Tree
+
+```
+Does your workflow require multiple LLM calls?
+├─ NO  → Use /api/jobs/create-and-call (faster, simpler)
+└─ YES → Use Create → Call → Complete (more control)
+   ├─ Sequential processing needed? → Multi-step
+   ├─ Need to track intermediate results? → Multi-step
+   └─ Complex agent logic? → Multi-step
+```
+
+### Performance Comparison
+
+| Metric | Single-Call | Multi-Step |
+|--------|------------|------------|
+| API Calls | 1 | 3+ |
+| Latency | ~1.5s | ~4.5s+ |
+| Code Complexity | Low | Medium |
+| Error Handling | Automatic | Manual |
+| Best For | Chat, simple tasks | Agents, complex workflows |
 
 ## Performance Optimization
 

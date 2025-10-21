@@ -137,6 +137,198 @@ CREATE TABLE credit_transactions (
 
 ## Budget Modes
 
+The credit system supports three budget modes that determine how credits are calculated and deducted:
+
+### Mode 1: Job-Based (Default)
+
+**1 credit = 1 completed job** regardless of actual costs.
+
+**Configuration:**
+```sql
+UPDATE team_credits
+SET budget_mode = 'job_based'
+WHERE team_id = 'team-alpha';
+```
+
+**Behavior:**
+- Simple, predictable pricing
+- Every completed job costs exactly 1 credit
+- Actual USD costs and token usage are tracked separately but don't affect credit deduction
+- Perfect for fixed-price offerings
+
+**Use Cases:**
+- Subscription plans with fixed credit allocations
+- Predictable pricing models
+- Freemium tiers
+
+### Mode 2: Consumption-USD
+
+Credits are deducted based on **actual USD cost** from LLM providers.
+
+**Configuration:**
+```sql
+UPDATE team_credits
+SET budget_mode = 'consumption_usd',
+    credits_per_dollar = 10.0  -- 1 credit = $0.10
+WHERE team_id = 'team-alpha';
+```
+
+**Behavior:**
+- Credit deduction: `credits = total_cost_usd * credits_per_dollar`
+- Minimum: 1 credit per successful job
+- Teams can have custom `credits_per_dollar` rates
+- Falls back to `DEFAULT_CREDITS_PER_DOLLAR` (10.0) if not set
+
+**Per-Team Rate Configuration:**
+
+Admins can set team-specific rates:
+```bash
+# Set custom rate for premium customers
+PATCH /api/credits/teams/{team_id}/conversion-rates
+Authorization: Bearer {admin_token}
+
+{
+  "credits_per_dollar": 5.0  # 1 credit = $0.20 (better rate)
+}
+```
+
+**Example Calculation:**
+```
+Job costs $0.034 in LLM API calls
+credits_per_dollar = 10.0
+Credits deducted = 0.034 * 10.0 = 0.34 → 1 credit (minimum)
+
+Job costs $0.152 in LLM API calls
+credits_per_dollar = 10.0
+Credits deducted = 0.152 * 10.0 = 1.52 → 2 credits
+```
+
+**Use Cases:**
+- Pay-as-you-go billing
+- Enterprise customers with volume discounts
+- Teams with different pricing tiers
+
+### Mode 3: Consumption-Tokens
+
+Credits are deducted based on **total tokens used**.
+
+**Configuration:**
+```sql
+UPDATE team_credits
+SET budget_mode = 'consumption_tokens',
+    tokens_per_credit = 10000  -- 10,000 tokens = 1 credit
+WHERE team_id = 'team-alpha';
+```
+
+**Behavior:**
+- Credit deduction: `credits = total_tokens / tokens_per_credit`
+- Minimum: 1 credit per successful job
+- Teams can have custom `tokens_per_credit` rates
+- Falls back to `DEFAULT_TOKENS_PER_CREDIT` (10000) if not set
+
+**Per-Team Rate Configuration:**
+
+Admins can set team-specific rates:
+```bash
+# Set custom rate for high-volume customers
+PATCH /api/credits/teams/{team_id}/conversion-rates
+Authorization: Bearer {admin_token}
+
+{
+  "tokens_per_credit": 20000  # 20,000 tokens = 1 credit (better rate)
+}
+```
+
+**Example Calculation:**
+```
+Job uses 8,500 tokens
+tokens_per_credit = 10000
+Credits deducted = 8500 / 10000 = 0.85 → 1 credit (minimum)
+
+Job uses 45,000 tokens
+tokens_per_credit = 10000
+Credits deducted = 45000 / 10000 = 4.5 → 5 credits
+```
+
+**Use Cases:**
+- Token-based pricing models
+- Different rates for different customer tiers
+- Cost pass-through with markup
+
+### Budget Mode Comparison
+
+| Mode | Calculation | Predictability | Flexibility | Best For |
+|------|-------------|----------------|-------------|----------|
+| **job_based** | 1 credit/job | High | Low | Fixed pricing, subscriptions |
+| **consumption_usd** | USD * rate | Medium | High | Enterprise, volume pricing |
+| **consumption_tokens** | Tokens / rate | Medium | High | Token-based SaaS, developer tools |
+
+### Managing Conversion Rates (Admin Only)
+
+Administrators can configure per-team conversion rates via the API:
+
+#### Get Current Rates
+
+```bash
+GET /api/credits/teams/{team_id}/conversion-rates
+Authorization: Bearer {admin_token}
+
+Response:
+{
+  "team_id": "team-alpha",
+  "tokens_per_credit": 10000,
+  "credits_per_dollar": 10.0,
+  "budget_mode": "consumption_tokens",
+  "using_defaults": {
+    "tokens_per_credit": false,
+    "credits_per_dollar": true
+  }
+}
+```
+
+#### Update Rates
+
+```bash
+PATCH /api/credits/teams/{team_id}/conversion-rates
+Authorization: Bearer {admin_token}
+Content-Type: application/json
+
+{
+  "tokens_per_credit": 20000,      # Optional
+  "credits_per_dollar": 5.0         # Optional
+}
+
+Response:
+{
+  "team_id": "team-alpha",
+  "tokens_per_credit": 20000,
+  "credits_per_dollar": 5.0,
+  "message": "Conversion rates updated successfully"
+}
+```
+
+**Validation:**
+- Both values must be positive numbers
+- `tokens_per_credit` must be an integer
+- `credits_per_dollar` can be a decimal
+- Setting to `null` will use system defaults
+
+### Default Values
+
+If team-specific rates are not configured, the system uses these defaults:
+
+```python
+DEFAULT_TOKENS_PER_CREDIT = 10000      # 10,000 tokens = 1 credit
+DEFAULT_CREDITS_PER_DOLLAR = 10.0      # 1 credit = $0.10
+MINIMUM_CREDITS_PER_JOB = 1            # Always deduct at least 1 credit
+```
+
+These are defined in `src/api/constants.py`.
+
+---
+
+## Fixed Budget Implementation
+
 ### 1. Fixed Budget
 
 Team has a fixed allocation. No automatic refills.
