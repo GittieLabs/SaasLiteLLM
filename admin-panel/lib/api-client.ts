@@ -147,4 +147,8 @@ export const api = {
     const queryParams = params ? new URLSearchParams(params).toString() : '';
     return request(`/api/jobs/organizations/${organizationId}/stats${queryParams ? `?${queryParams}` : ''}`);
   },
+  getOrganizationAnalytics: (organizationId: string, params?: any) => {
+    const queryParams = params ? new URLSearchParams(params).toString() : '';
+    return request(`/api/jobs/organizations/${organizationId}/analytics${queryParams ? `?${queryParams}` : ''}`);
+  },
 };

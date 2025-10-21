@@ -455,3 +455,248 @@ async def get_organization_job_stats(
         total_credits_used=total_credits_used,
         top_teams=top_teams
     )
+
+
+class OrganizationAnalytics(BaseModel):
+    organization_id: str
+    organization_name: Optional[str]
+    # Summary stats
+    total_spend: float
+    total_requests: int
+    successful_requests: int
+    failed_requests: int
+    total_tokens: int
+    # Daily spend breakdown
+    daily_spend: List[Dict[str, Any]]  # [{date: "2024-10-20", spend: 0.005}]
+    # Spend per team (top 10)
+    spend_per_team: List[Dict[str, Any]]  # [{team_id: "...", spend: 0.005, successful: 3, failed: 0, tokens: 60}]
+    # Top models by spend
+    top_models: List[Dict[str, Any]]  # [{model: "gpt-4", spend: 0.005, count: 10}]
+    # Provider usage breakdown
+    provider_usage: List[Dict[str, Any]]  # [{provider: "openai", spend: 0.005, successful: 3, failed: 0, tokens: 60}]
+
+
+@router.get("/organizations/{organization_id}/analytics", response_model=OrganizationAnalytics)
+async def get_organization_analytics(
+    organization_id: str,
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _ = Depends(verify_admin_auth)
+):
+    """
+    Get comprehensive analytics for an organization including:
+    - Daily spend breakdown
+    - Spend per team
+    - Top models by spend
+    - Provider usage breakdown
+    """
+    # Verify organization exists
+    from ..models.organizations import Organization
+    org = db.query(Organization).filter(
+        Organization.organization_id == organization_id
+    ).first()
+
+    if not org:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Organization '{organization_id}' not found"
+        )
+
+    # Get all teams in organization
+    teams = db.query(TeamCredits).filter(
+        TeamCredits.organization_id == organization_id
+    ).all()
+
+    team_ids = [t.team_id for t in teams]
+
+    if not team_ids:
+        # No teams in organization - return empty analytics
+        return OrganizationAnalytics(
+            organization_id=organization_id,
+            organization_name=org.name,
+            total_spend=0.0,
+            total_requests=0,
+            successful_requests=0,
+            failed_requests=0,
+            total_tokens=0,
+            daily_spend=[],
+            spend_per_team=[],
+            top_models=[],
+            provider_usage=[]
+        )
+
+    # Build job query for all teams
+    job_query = db.query(Job).filter(Job.team_id.in_(team_ids))
+
+    # Apply date filters
+    if start_date:
+        try:
+            start_dt = datetime.fromisoformat(start_date)
+            job_query = job_query.filter(Job.created_at >= start_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid start_date format: {start_date}"
+            )
+
+    if end_date:
+        try:
+            end_dt = datetime.fromisoformat(end_date) + timedelta(days=1)
+            job_query = job_query.filter(Job.created_at < end_dt)
+        except ValueError:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid end_date format: {end_date}"
+            )
+
+    # Get all jobs
+    jobs = job_query.all()
+    job_ids = [j.job_id for j in jobs]
+
+    # Get all LLM calls for these jobs
+    if job_ids:
+        calls = db.query(LLMCall).filter(LLMCall.job_id.in_(job_ids)).all()
+    else:
+        calls = []
+
+    # Summary stats
+    total_requests = len(calls)
+    successful_requests = len([c for c in calls if not c.error])
+    failed_requests = len([c for c in calls if c.error])
+    total_tokens = sum(c.total_tokens or 0 for c in calls)
+    total_spend = sum(float(c.cost_usd) for c in calls)
+
+    # Daily spend breakdown
+    daily_spend_map = {}
+    for call in calls:
+        date_str = call.created_at.date().isoformat()
+        if date_str not in daily_spend_map:
+            daily_spend_map[date_str] = 0.0
+        daily_spend_map[date_str] += float(call.cost_usd)
+
+    daily_spend = [
+        {"date": date, "spend": round(spend, 6)}
+        for date, spend in sorted(daily_spend_map.items())
+    ]
+
+    # Spend per team (aggregate by team_id from jobs)
+    team_spend_map = {}
+    for job in jobs:
+        team_id = job.team_id
+        if team_id not in team_spend_map:
+            team_spend_map[team_id] = {
+                "spend": 0.0,
+                "successful": 0,
+                "failed": 0,
+                "tokens": 0
+            }
+
+        # Get calls for this job
+        job_calls = [c for c in calls if c.job_id == job.job_id]
+        for call in job_calls:
+            team_spend_map[team_id]["spend"] += float(call.cost_usd)
+            team_spend_map[team_id]["tokens"] += call.total_tokens or 0
+            if call.error:
+                team_spend_map[team_id]["failed"] += 1
+            else:
+                team_spend_map[team_id]["successful"] += 1
+
+    spend_per_team = sorted(
+        [
+            {
+                "team_id": team_id,
+                "spend": round(data["spend"], 6),
+                "successful": data["successful"],
+                "failed": data["failed"],
+                "tokens": data["tokens"]
+            }
+            for team_id, data in team_spend_map.items()
+        ],
+        key=lambda x: x["spend"],
+        reverse=True
+    )[:10]  # Top 10 teams
+
+    # Top models by spend
+    model_spend_map = {}
+    for call in calls:
+        model = call.model_used or "unknown"
+        if model not in model_spend_map:
+            model_spend_map[model] = {"spend": 0.0, "count": 0}
+        model_spend_map[model]["spend"] += float(call.cost_usd)
+        model_spend_map[model]["count"] += 1
+
+    top_models = sorted(
+        [
+            {
+                "model": model,
+                "spend": round(data["spend"], 6),
+                "count": data["count"]
+            }
+            for model, data in model_spend_map.items()
+        ],
+        key=lambda x: x["spend"],
+        reverse=True
+    )[:10]  # Top 10 models
+
+    # Provider usage breakdown (extract provider from model name)
+    def extract_provider(model_name):
+        if not model_name:
+            return "unknown"
+        model_lower = model_name.lower()
+        if "gpt" in model_lower or "openai" in model_lower:
+            return "openai"
+        elif "claude" in model_lower or "anthropic" in model_lower:
+            return "anthropic"
+        elif "gemini" in model_lower or "google" in model_lower:
+            return "google"
+        elif "llama" in model_lower or "meta" in model_lower:
+            return "meta"
+        else:
+            return "other"
+
+    provider_spend_map = {}
+    for call in calls:
+        provider = extract_provider(call.model_used)
+        if provider not in provider_spend_map:
+            provider_spend_map[provider] = {
+                "spend": 0.0,
+                "successful": 0,
+                "failed": 0,
+                "tokens": 0
+            }
+        provider_spend_map[provider]["spend"] += float(call.cost_usd)
+        provider_spend_map[provider]["tokens"] += call.total_tokens or 0
+        if call.error:
+            provider_spend_map[provider]["failed"] += 1
+        else:
+            provider_spend_map[provider]["successful"] += 1
+
+    provider_usage = sorted(
+        [
+            {
+                "provider": provider,
+                "spend": round(data["spend"], 6),
+                "successful": data["successful"],
+                "failed": data["failed"],
+                "tokens": data["tokens"]
+            }
+            for provider, data in provider_spend_map.items()
+        ],
+        key=lambda x: x["spend"],
+        reverse=True
+    )
+
+    return OrganizationAnalytics(
+        organization_id=organization_id,
+        organization_name=org.name,
+        total_spend=round(total_spend, 6),
+        total_requests=total_requests,
+        successful_requests=successful_requests,
+        failed_requests=failed_requests,
+        total_tokens=total_tokens,
+        daily_spend=daily_spend,
+        spend_per_team=spend_per_team,
+        top_models=top_models,
+        provider_usage=provider_usage
+    )
