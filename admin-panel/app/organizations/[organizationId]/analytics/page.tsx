@@ -95,7 +95,7 @@ function OrganizationAnalyticsContent() {
 
   // Date filters
   const [startDate, setStartDate] = useState('');
-  const [endDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   const loadAnalytics = async () => {
     try {
@@ -272,6 +272,193 @@ function OrganizationAnalyticsContent() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Job Stats Section */}
+          {jobStats && (
+            <>
+              {/* Job Metrics */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Total Jobs</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{jobStats.total_jobs}</div>
+                    <div className="text-sm text-muted-foreground mt-1">
+                      {jobStats.total_jobs > 0
+                        ? `${((jobStats.completed_jobs / jobStats.total_jobs) * 100).toFixed(1)}% completed`
+                        : '0% completed'}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Total Teams</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{jobStats.total_teams}</div>
+                    <div className="text-sm text-muted-foreground mt-1">
+                      Active in organization
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>LLM Calls</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{jobStats.total_llm_calls.toLocaleString()}</div>
+                    <div className="text-sm text-muted-foreground mt-1">
+                      {jobStats.total_llm_calls > 0
+                        ? `${((jobStats.successful_calls / jobStats.total_llm_calls) * 100).toFixed(1)}% success`
+                        : '0% success'}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription>Credits Used</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="text-3xl font-bold">{jobStats.total_credits_used.toLocaleString()}</div>
+                    <div className="text-sm text-muted-foreground mt-1">
+                      ${jobStats.total_cost_usd.toFixed(2)} total cost
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Job Status Breakdown */}
+              <Card className="mb-6">
+                <CardHeader>
+                  <CardTitle>Job Status Distribution</CardTitle>
+                  <CardDescription>Breakdown of jobs by current status</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <Card>
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Completed</div>
+                          <div className="text-2xl font-bold">{jobStats.completed_jobs}</div>
+                        </div>
+                        <Badge variant="default">
+                          {jobStats.total_jobs > 0
+                            ? `${((jobStats.completed_jobs / jobStats.total_jobs) * 100).toFixed(0)}%`
+                            : '0%'}
+                        </Badge>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">In Progress</div>
+                          <div className="text-2xl font-bold">{jobStats.in_progress_jobs}</div>
+                        </div>
+                        <Badge variant="secondary">
+                          {jobStats.total_jobs > 0
+                            ? `${((jobStats.in_progress_jobs / jobStats.total_jobs) * 100).toFixed(0)}%`
+                            : '0%'}
+                        </Badge>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Failed</div>
+                          <div className="text-2xl font-bold">{jobStats.failed_jobs}</div>
+                        </div>
+                        <Badge variant="destructive">
+                          {jobStats.total_jobs > 0
+                            ? `${((jobStats.failed_jobs / jobStats.total_jobs) * 100).toFixed(0)}%`
+                            : '0%'}
+                        </Badge>
+                      </CardContent>
+                    </Card>
+
+                    <Card>
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Pending</div>
+                          <div className="text-2xl font-bold">
+                            {jobStats.total_jobs - jobStats.completed_jobs - jobStats.in_progress_jobs - jobStats.failed_jobs}
+                          </div>
+                        </div>
+                        <Badge variant="outline">
+                          {jobStats.total_jobs > 0
+                            ? `${(((jobStats.total_jobs - jobStats.completed_jobs - jobStats.in_progress_jobs - jobStats.failed_jobs) / jobStats.total_jobs) * 100).toFixed(0)}%`
+                            : '0%'}
+                        </Badge>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Top Teams by Job Count */}
+              {jobStats.top_teams.length > 0 && (
+                <Card className="mb-6">
+                  <CardHeader>
+                    <CardTitle>Top Teams by Job Activity</CardTitle>
+                    <CardDescription>Teams with the most jobs processed</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Rank</TableHead>
+                            <TableHead>Team ID</TableHead>
+                            <TableHead className="text-right">Job Count</TableHead>
+                            <TableHead className="text-right">Credits Used</TableHead>
+                            <TableHead className="text-right">% of Total</TableHead>
+                            <TableHead>Actions</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {jobStats.top_teams.map((team, index) => (
+                            <TableRow key={team.team_id}>
+                              <TableCell>
+                                <Badge variant={index < 3 ? 'default' : 'outline'}>
+                                  #{index + 1}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="font-mono text-sm">{team.team_id}</TableCell>
+                              <TableCell className="text-right font-medium">
+                                {team.job_count.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {team.credits_used.toLocaleString()}
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {jobStats.total_jobs > 0
+                                  ? `${((team.job_count / jobStats.total_jobs) * 100).toFixed(1)}%`
+                                  : '0%'}
+                              </TableCell>
+                              <TableCell>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/jobs/teams/${team.team_id}`)}
+                                >
+                                  View Jobs
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
+          )}
 
           {/* Daily Spend Chart */}
           {analytics.daily_spend.length > 0 && (
