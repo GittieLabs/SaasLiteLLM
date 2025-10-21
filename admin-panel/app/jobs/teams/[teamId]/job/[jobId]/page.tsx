@@ -138,65 +138,65 @@ function JobDetailContent() {
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                     <div>
-                      <div className="text-sm text-gray-500">Type</div>
+                      <div className="text-sm text-muted-foreground">Type</div>
                       <div className="font-medium">{jobDetail.job.job_type}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Status</div>
+                      <div className="text-sm text-muted-foreground">Status</div>
                       <div>{getStatusBadge(jobDetail.job.status)}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Created</div>
+                      <div className="text-sm text-muted-foreground">Created</div>
                       <div className="font-medium">
                         {new Date(jobDetail.job.created_at).toLocaleString()}
                       </div>
                     </div>
                     {jobDetail.job.completed_at && (
                       <div>
-                        <div className="text-sm text-gray-500">Completed</div>
+                        <div className="text-sm text-muted-foreground">Completed</div>
                         <div className="font-medium">
                           {new Date(jobDetail.job.completed_at).toLocaleString()}
                         </div>
                       </div>
                     )}
                     <div>
-                      <div className="text-sm text-gray-500">Total Calls</div>
+                      <div className="text-sm text-muted-foreground">Total Calls</div>
                       <div className="font-medium">{jobDetail.job.total_calls}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Successful Calls</div>
+                      <div className="text-sm text-muted-foreground">Successful Calls</div>
                       <div className="font-medium text-green-600">
                         {jobDetail.job.successful_calls}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Failed Calls</div>
+                      <div className="text-sm text-muted-foreground">Failed Calls</div>
                       <div className="font-medium text-red-600">
                         {jobDetail.job.failed_calls}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Retries</div>
+                      <div className="text-sm text-muted-foreground">Retries</div>
                       <div className="font-medium">{jobDetail.job.retry_count}</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Total Tokens</div>
+                      <div className="text-sm text-muted-foreground">Total Tokens</div>
                       <div className="font-medium">
                         {jobDetail.job.total_tokens.toLocaleString()}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Total Cost</div>
+                      <div className="text-sm text-muted-foreground">Total Cost</div>
                       <div className="font-medium">
                         ${jobDetail.job.total_cost_usd.toFixed(6)}
                       </div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Avg Latency</div>
+                      <div className="text-sm text-muted-foreground">Avg Latency</div>
                       <div className="font-medium">{jobDetail.job.avg_latency_ms}ms</div>
                     </div>
                     <div>
-                      <div className="text-sm text-gray-500">Credits Applied</div>
+                      <div className="text-sm text-muted-foreground">Credits Applied</div>
                       <div>
                         {jobDetail.job.credit_applied ? (
                           <Badge variant="secondary">Yes</Badge>
@@ -207,10 +207,10 @@ function JobDetailContent() {
                     </div>
                   </div>
 
-                  {jobDetail.job.job_metadata && (
+                  {jobDetail.job.job_metadata && Object.keys(jobDetail.job.job_metadata).length > 0 && (
                     <div className="mt-4 pt-4 border-t">
-                      <div className="text-sm text-gray-500 mb-2">Job Metadata</div>
-                      <pre className="bg-gray-100 p-3 rounded text-xs overflow-x-auto">
+                      <div className="text-sm text-muted-foreground mb-2">Job Metadata</div>
+                      <pre className="bg-muted/50 p-3 rounded text-xs overflow-x-auto border">
                         {JSON.stringify(jobDetail.job.job_metadata, null, 2)}
                       </pre>
                     </div>
@@ -252,7 +252,7 @@ function JobDetailContent() {
                         <TableBody>
                           {jobDetail.calls.map((call) => (
                             <>
-                              <TableRow key={call.call_id} className="hover:bg-gray-50">
+                              <TableRow key={call.call_id} className="hover:bg-muted/50">
                                 <TableCell className="font-mono text-xs">
                                   {call.call_id.substring(0, 8)}...
                                 </TableCell>
@@ -261,7 +261,7 @@ function JobDetailContent() {
                                     {call.model_used || 'N/A'}
                                   </div>
                                   {call.model_group_used && (
-                                    <div className="text-xs text-gray-500">
+                                    <div className="text-xs text-muted-foreground">
                                       Group: {call.model_group_used}
                                     </div>
                                   )}
@@ -270,7 +270,7 @@ function JobDetailContent() {
                                   {call.purpose ? (
                                     <Badge variant="outline">{call.purpose}</Badge>
                                   ) : (
-                                    <span className="text-gray-400">-</span>
+                                    <span className="text-muted-foreground">-</span>
                                   )}
                                 </TableCell>
                                 <TableCell className="text-sm">
@@ -310,14 +310,14 @@ function JobDetailContent() {
                               </TableRow>
                               {expandedCall === call.call_id && (
                                 <TableRow>
-                                  <TableCell colSpan={11} className="bg-gray-50">
+                                  <TableCell colSpan={11} className="bg-muted/30">
                                     <div className="p-4 space-y-4">
                                       {call.error && (
                                         <div>
-                                          <div className="text-sm font-medium text-red-600 mb-2">
+                                          <div className="text-sm font-medium text-destructive mb-2">
                                             Error
                                           </div>
-                                          <pre className="bg-red-50 p-3 rounded text-xs overflow-x-auto text-red-700">
+                                          <pre className="bg-destructive/10 p-3 rounded text-xs overflow-x-auto border border-destructive/20">
                                             {call.error}
                                           </pre>
                                         </div>
@@ -325,10 +325,10 @@ function JobDetailContent() {
 
                                       {call.request_data && (
                                         <div>
-                                          <div className="text-sm font-medium text-gray-700 mb-2">
+                                          <div className="text-sm font-medium mb-2">
                                             Request Data
                                           </div>
-                                          <pre className="bg-white p-3 rounded text-xs overflow-x-auto border">
+                                          <pre className="bg-muted/50 p-3 rounded text-xs overflow-x-auto border">
                                             {JSON.stringify(call.request_data, null, 2)}
                                           </pre>
                                         </div>
@@ -336,10 +336,10 @@ function JobDetailContent() {
 
                                       {call.response_data && (
                                         <div>
-                                          <div className="text-sm font-medium text-gray-700 mb-2">
+                                          <div className="text-sm font-medium mb-2">
                                             Response Data
                                           </div>
-                                          <pre className="bg-white p-3 rounded text-xs overflow-x-auto border">
+                                          <pre className="bg-muted/50 p-3 rounded text-xs overflow-x-auto border">
                                             {JSON.stringify(call.response_data, null, 2)}
                                           </pre>
                                         </div>
