@@ -170,13 +170,18 @@ async def list_team_jobs(
     offset = (page - 1) * page_size
     jobs = query.order_by(Job.created_at.desc()).offset(offset).limit(page_size).all()
 
-    # Build response with aggregated metrics
+    # Build response with aggregated metrics (exclude jobs with no LLM calls)
     job_summaries = []
     for job in jobs:
         # Get aggregated call metrics
         calls = db.query(LLMCall).filter(LLMCall.job_id == job.job_id).all()
 
         total_calls = len(calls)
+
+        # Skip jobs with no LLM calls (orphaned/abandoned jobs)
+        if total_calls == 0:
+            continue
+
         successful_calls = len([c for c in calls if not c.error])
         failed_calls = len([c for c in calls if c.error])
 
