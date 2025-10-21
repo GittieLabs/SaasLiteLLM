@@ -680,31 +680,341 @@ print(f"Error rate: {stats['error_rate']:.2%}")
 print(f"Avg latency: {stats['avg_latency_ms']:.0f}ms")
 ```
 
+## Response Type Definitions
+
+Understanding the structure of API responses helps with proper error handling and data extraction.
+
+### Success Response Structure
+
+```typescript
+// Jobs API - Create Job
+{
+  "job_id": string,           // UUID
+  "status": "pending",
+  "created_at": string        // ISO 8601 timestamp
+}
+
+// Jobs API - Complete Job
+{
+  "job_id": string,
+  "status": "completed" | "failed",
+  "completed_at": string,
+  "costs": {
+    "total_calls": number,
+    "successful_calls": number,
+    "failed_calls": number,
+    "total_tokens": number,
+    "total_cost_usd": number,
+    "avg_latency_ms": number,
+    "credit_applied": boolean,
+    "credits_remaining": number
+  },
+  "calls": Array<{
+    "call_id": string,
+    "purpose": string,
+    "model_group": string,
+    "tokens": number,
+    "latency_ms": number,
+    "error": string | null
+  }>
+}
+
+// Jobs API - Single-Call Job
+{
+  "job_id": string,
+  "status": "completed",
+  "response": {
+    "content": string,
+    "finish_reason": "stop" | "length" | "content_filter"
+  },
+  "metadata": {
+    "tokens_used": number,
+    "latency_ms": number,
+    "model": string
+  },
+  "costs": { /* same as Complete Job */ },
+  "completed_at": string
+}
+
+// LLM Calls API
+{
+  "call_id": string,
+  "response": {
+    "content": string,
+    "finish_reason": string
+  },
+  "metadata": {
+    "tokens_used": number,
+    "latency_ms": number,
+    "model_group": string
+  }
+}
+```
+
+### Error Response Structure
+
+All error responses follow this format:
+
+```typescript
+{
+  "detail": string | Array<ValidationError>
+}
+
+// Validation errors (422 status)
+{
+  "detail": [
+    {
+      "loc": Array<string | number>,  // Field path
+      "msg": string,                   // Error message
+      "type": string                   // Error type
+    }
+  ]
+}
+```
+
+**Examples:**
+
+```json
+// 401 Unauthorized
+{
+  "detail": "Invalid or missing API key"
+}
+
+// 403 Forbidden
+{
+  "detail": "Team suspended or insufficient credits"
+}
+
+// 404 Not Found
+{
+  "detail": "Job not found"
+}
+
+// 422 Validation Error
+{
+  "detail": [
+    {
+      "loc": ["body", "messages"],
+      "msg": "field required",
+      "type": "value_error.missing"
+    }
+  ]
+}
+
+// 429 Rate Limit
+{
+  "detail": "Rate limit exceeded"
+}
+
+// 500 Server Error
+{
+  "detail": "Internal server error"
+}
+```
+
+## Retry Best Practices
+
+### When to Retry
+
+**Retry these errors:**
+- ✅ 429 (Rate Limit) - Always retry with exponential backoff
+- ✅ 500 (Internal Server Error) - Retry up to 3 times
+- ✅ 503 (Service Unavailable) - Retry with longer delays
+- ✅ Network timeouts - Retry with increased timeout
+- ✅ Connection errors - Retry with exponential backoff
+
+**Do NOT retry these errors:**
+- ❌ 400 (Bad Request) - Fix the request format
+- ❌ 401 (Unauthorized) - Check authentication
+- ❌ 403 (Forbidden) - Check permissions/credits
+- ❌ 404 (Not Found) - Resource doesn't exist
+- ❌ 422 (Validation Error) - Fix validation issues
+
+### Exponential Backoff Strategy
+
+**Recommended Configuration:**
+
+| Attempt | Wait Time | Total Time Elapsed |
+|---------|-----------|-------------------|
+| 1 | 0s (immediate) | 0s |
+| 2 | 1s | 1s |
+| 3 | 2s | 3s |
+| 4 | 4s | 7s |
+| 5 | 8s | 15s |
+
+**Implementation:**
+
+```python
+import time
+import random
+
+def exponential_backoff_with_jitter(attempt: int, base_delay: float = 1.0, max_delay: float = 32.0) -> float:
+    """
+    Calculate exponential backoff with jitter.
+
+    Args:
+        attempt: Current retry attempt (0-indexed)
+        base_delay: Base delay in seconds
+        max_delay: Maximum delay in seconds
+
+    Returns:
+        Delay in seconds with random jitter
+    """
+    # Exponential: base_delay * 2^attempt
+    delay = min(base_delay * (2 ** attempt), max_delay)
+
+    # Add jitter (±25% random variation)
+    jitter = delay * 0.25 * (2 * random.random() - 1)
+
+    return delay + jitter
+
+def make_request_with_smart_retry(
+    url: str,
+    headers: dict,
+    data: dict,
+    max_retries: int = 3,
+    timeout: int = 30
+) -> dict:
+    """
+    Make API request with intelligent retry logic.
+
+    Retries:
+    - 429 (Rate Limit): Up to max_retries with exponential backoff
+    - 500/503 (Server errors): Up to max_retries with exponential backoff
+    - Timeouts/Connection errors: Up to max_retries with exponential backoff
+
+    Does NOT retry:
+    - 400, 401, 403, 404, 422: Client errors that won't be fixed by retrying
+    """
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(url, headers=headers, json=data, timeout=timeout)
+            response.raise_for_status()
+            return response.json()
+
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                delay = exponential_backoff_with_jitter(attempt)
+                print(f"Timeout. Retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+            else:
+                raise APIError("Request timed out after all retries")
+
+        except requests.exceptions.ConnectionError:
+            if attempt < max_retries - 1:
+                delay = exponential_backoff_with_jitter(attempt)
+                print(f"Connection error. Retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+            else:
+                raise APIError("Connection failed after all retries")
+
+        except requests.exceptions.HTTPError as e:
+            status_code = e.response.status_code
+            detail = e.response.json().get("detail", "Unknown error")
+
+            # Don't retry client errors (4xx except 429)
+            if 400 <= status_code < 500 and status_code != 429:
+                if status_code == 401:
+                    raise AuthenticationError(f"Authentication failed: {detail}")
+                elif status_code == 403:
+                    raise APIError(f"Forbidden: {detail}")
+                elif status_code == 404:
+                    raise APIError(f"Not found: {detail}")
+                elif status_code == 422:
+                    raise APIError(f"Validation error: {detail}")
+                else:
+                    raise APIError(f"Client error {status_code}: {detail}")
+
+            # Retry 429 and 5xx errors
+            if attempt < max_retries - 1:
+                delay = exponential_backoff_with_jitter(attempt)
+                print(f"HTTP {status_code}. Retrying in {delay:.1f}s (attempt {attempt + 1}/{max_retries})")
+                time.sleep(delay)
+            else:
+                if status_code == 429:
+                    raise RateLimitError(f"Rate limit exceeded: {detail}")
+                else:
+                    raise ServerError(f"Server error {status_code}: {detail}")
+
+    raise APIError("Request failed after all retries")
+```
+
+### Timeout Configuration
+
+**Recommended Timeouts by Endpoint:**
+
+| Endpoint | Recommended Timeout | Notes |
+|----------|-------------------|-------|
+| `/api/jobs/create` | 10s | Fast operation |
+| `/api/jobs/{id}` (GET) | 10s | Fast operation |
+| `/api/jobs/{id}/llm-call` | 60s | LLM calls can be slow |
+| `/api/jobs/{id}/complete` | 30s | Aggregation + DB writes |
+| `/api/jobs/create-and-call` | 60s | Includes LLM call |
+| Streaming endpoints | 120s | Long-running operations |
+
+**Example with endpoint-specific timeouts:**
+
+```python
+ENDPOINT_TIMEOUTS = {
+    "/api/jobs/create": 10,
+    "/api/jobs/": 10,  # GET job
+    "/api/jobs/.*llm-call": 60,
+    "/api/jobs/.*complete": 30,
+    "/api/jobs/create-and-call": 60,
+}
+
+def get_timeout_for_endpoint(url: str) -> int:
+    """Get recommended timeout for endpoint"""
+    for pattern, timeout in ENDPOINT_TIMEOUTS.items():
+        if pattern in url:
+            return timeout
+    return 30  # Default
+
+# Usage
+timeout = get_timeout_for_endpoint(url)
+response = requests.post(url, json=data, timeout=timeout)
+```
+
 ## Best Practices
 
 ### 1. Always Use Timeouts
 
 ```python
-# ✅ Good
+# ✅ Good - With appropriate timeout
 response = requests.post(url, json=data, timeout=30)
+
+# ✅ Better - With endpoint-specific timeout
+timeout = get_timeout_for_endpoint(url)
+response = requests.post(url, json=data, timeout=timeout)
 
 # ❌ Bad - Can hang forever
 response = requests.post(url, json=data)
 ```
 
-### 2. Implement Retry Logic
+### 2. Implement Smart Retry Logic
 
 ```python
-# Use exponential backoff for retries
+# ✅ Good - Exponential backoff with jitter
 for attempt in range(3):
     try:
         response = requests.post(url, json=data, timeout=30)
         response.raise_for_status()
         break
-    except requests.exceptions.RequestException:
-        if attempt == 2:
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code in [429, 500, 503] and attempt < 2:
+            delay = (2 ** attempt) + random.uniform(0, 0.5)
+            time.sleep(delay)
+        else:
             raise
-        time.sleep(2 ** attempt)
+
+# ❌ Bad - Fixed delay, retries everything
+for attempt in range(3):
+    try:
+        response = requests.post(url, json=data, timeout=30)
+        response.raise_for_status()
+        break
+    except:
+        time.sleep(1)  # Always 1 second, no distinction between errors
 ```
 
 ### 3. Handle Specific Errors
@@ -741,9 +1051,12 @@ except Exception as e:
         "API request failed",
         extra={
             "error": str(e),
+            "error_type": type(e).__name__,
             "team_id": team_id,
             "job_id": job_id,
-            "url": url
+            "url": url,
+            "attempt": attempt,
+            "status_code": getattr(e.response, 'status_code', None)
         }
     )
 ```
@@ -757,9 +1070,72 @@ try:
     # Complete successfully
     complete_job(job_id, "completed")
 except Exception as e:
-    # Mark job as failed
-    complete_job(job_id, "failed")
+    # Mark job as failed (important for credit tracking!)
+    complete_job(job_id, "failed", error_message=str(e))
     raise
+```
+
+### 6. Use Circuit Breaker Pattern
+
+For high-volume applications, implement circuit breaker to prevent cascading failures:
+
+```python
+from datetime import datetime, timedelta
+
+class CircuitBreaker:
+    """Simple circuit breaker implementation"""
+
+    def __init__(self, failure_threshold: int = 5, timeout: int = 60):
+        self.failure_threshold = failure_threshold
+        self.timeout = timeout
+        self.failures = 0
+        self.last_failure_time = None
+        self.state = "closed"  # closed, open, half_open
+
+    def call(self, func, *args, **kwargs):
+        """Call function with circuit breaker"""
+
+        # If circuit is open, check if timeout expired
+        if self.state == "open":
+            if datetime.now() - self.last_failure_time > timedelta(seconds=self.timeout):
+                self.state = "half_open"
+                self.failures = 0
+            else:
+                raise APIError("Circuit breaker is open")
+
+        try:
+            result = func(*args, **kwargs)
+
+            # Success - reset failures
+            if self.state == "half_open":
+                self.state = "closed"
+            self.failures = 0
+
+            return result
+
+        except (ServerError, RateLimitError) as e:
+            # Track failures
+            self.failures += 1
+            self.last_failure_time = datetime.now()
+
+            # Open circuit if threshold exceeded
+            if self.failures >= self.failure_threshold:
+                self.state = "open"
+
+            raise
+
+# Usage
+circuit_breaker = CircuitBreaker(failure_threshold=5, timeout=60)
+
+try:
+    result = circuit_breaker.call(
+        make_api_request,
+        url=url,
+        headers=headers,
+        data=data
+    )
+except APIError as e:
+    print(f"Request failed: {e}")
 ```
 
 ## Next Steps

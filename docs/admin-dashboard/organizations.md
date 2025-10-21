@@ -290,6 +290,28 @@ curl -X POST http://localhost:8003/api/teams/create \
 
 ## Organization Usage & Analytics
 
+### Consolidated Analytics Dashboard
+
+The admin dashboard provides a unified analytics view that combines organization job statistics with usage analytics in a single interface.
+
+**Via Dashboard:**
+- Navigate to "Organizations" in the sidebar
+- Click on an organization name
+- Click the "Analytics" tab
+
+**Features:**
+- **Job Statistics**: Total jobs, success rate, failure rate
+- **Usage Metrics**: Total calls, tokens consumed, cost in USD
+- **Team Breakdown**: Usage per team with drill-down capability
+- **Job Type Analysis**: Distribution by job type
+- **Time Series**: Usage trends over customizable date ranges
+
+**Consolidated View Benefits:**
+- Single page for all organization metrics
+- No need to navigate between multiple views
+- Real-time data from jobs and llm_calls tables
+- Exportable reports in CSV/JSON format
+
 ### Usage Statistics
 
 Track usage across all teams in an organization:
@@ -303,6 +325,33 @@ Track usage across all teams in an organization:
 - Average cost per job
 - Usage by job type
 - Usage by team
+
+**Via Dashboard:**
+
+The analytics page displays:
+
+1. **Overview Cards**
+   - Total Jobs (with success/failure breakdown)
+   - Total LLM Calls
+   - Total Tokens Used
+   - Total Cost (USD)
+
+2. **Team Usage Table**
+   - Jobs per team
+   - Calls per team
+   - Cost per team
+   - Tokens per team
+   - Click team to drill down
+
+3. **Job Type Distribution**
+   - Pie chart showing job types
+   - Count and percentage for each type
+   - Cost breakdown by type
+
+4. **Timeline Graph**
+   - Daily/weekly/monthly aggregation
+   - Toggle between jobs, calls, tokens, cost
+   - Filterable date range
 
 **Via API:**
 ```bash
@@ -344,6 +393,9 @@ curl "http://localhost:8003/api/organizations/org_acme/usage?period=2024-10"
   }
 }
 ```
+
+!!! note "Analytics Consolidation"
+    Previously, organization analytics required navigating to `/jobs/organizations/{id}` separately from the organization details page. The analytics have been consolidated into a single "Analytics" tab on the organization details page for better user experience.
 
 ### Cost Tracking
 
