@@ -85,9 +85,7 @@ function TeamJobsContent() {
       if (endDate) params.end_date = endDate;
       if (jobIdFilter) params.job_id_filter = jobIdFilter;
 
-      console.log('Loading jobs for team:', teamId, 'with params:', params);
       const response: JobListResponse = await api.getTeamJobs(teamId, params);
-      console.log('Jobs response:', response);
 
       setJobs(response.jobs);
       setTotal(response.total);
@@ -128,7 +126,7 @@ function TeamJobsContent() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
@@ -140,12 +138,12 @@ function TeamJobsContent() {
             >
               Back to Teams
             </Button>
-            <h1 className="text-3xl font-bold text-gray-900">Team Jobs</h1>
-            <p className="text-gray-600 mt-2">Team ID: {teamId}</p>
+            <h1 className="text-3xl font-bold">Team Jobs</h1>
+            <p className="text-muted-foreground mt-2">Team ID: {teamId}</p>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            <div className="bg-destructive/15 border border-destructive text-destructive px-4 py-3 rounded mb-4">
               {error}
             </div>
           )}
@@ -166,7 +164,7 @@ function TeamJobsContent() {
                       setStatusFilter(e.target.value);
                       setPage(1);
                     }}
-                    className="w-full mt-1 rounded-md border border-gray-300 bg-white px-3 py-2 text-sm"
+                    className="w-full mt-1 rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="">All Statuses</option>
                     <option value="pending">Pending</option>
@@ -254,7 +252,7 @@ function TeamJobsContent() {
               {loading ? (
                 <div className="text-center py-8">Loading jobs...</div>
               ) : jobs.length === 0 ? (
-                <div className="text-center py-8 text-gray-500">
+                <div className="text-center py-8 text-muted-foreground">
                   No jobs found for this team.
                 </div>
               ) : (
@@ -280,7 +278,7 @@ function TeamJobsContent() {
                       </TableHeader>
                       <TableBody>
                         {jobs.map((job) => (
-                          <TableRow key={job.job_id} className="hover:bg-gray-50">
+                          <TableRow key={job.job_id}>
                             <TableCell className="font-mono text-xs">
                               {job.job_id.substring(0, 8)}...
                             </TableCell>
@@ -330,7 +328,7 @@ function TeamJobsContent() {
 
                   {/* Pagination */}
                   <div className="flex items-center justify-between mt-4">
-                    <div className="text-sm text-gray-600">
+                    <div className="text-sm text-muted-foreground">
                       Page {page} of {totalPages} ({total} total jobs)
                     </div>
                     <div className="flex gap-2">

@@ -103,7 +103,7 @@ function JobDetailContent() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
@@ -115,12 +115,12 @@ function JobDetailContent() {
             >
               Back to Jobs
             </Button>
-            <h1 className="text-3xl font-bold text-gray-900">Job Details</h1>
-            <p className="text-gray-600 mt-2 font-mono text-sm">Job ID: {jobId}</p>
+            <h1 className="text-3xl font-bold">Job Details</h1>
+            <p className="text-muted-foreground mt-2 font-mono text-sm">Job ID: {jobId}</p>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            <div className="bg-destructive/15 border border-destructive text-destructive px-4 py-3 rounded mb-4">
               {error}
             </div>
           )}
@@ -228,7 +228,7 @@ function JobDetailContent() {
                 </CardHeader>
                 <CardContent>
                   {jobDetail.calls.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
+                    <div className="text-center py-8 text-muted-foreground">
                       No LLM calls recorded for this job.
                     </div>
                   ) : (
@@ -358,7 +358,7 @@ function JobDetailContent() {
               </Card>
             </>
           ) : (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               Job not found.
             </div>
           )}

@@ -97,7 +97,7 @@ function OrganizationJobsContent() {
   };
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-background">
       <Sidebar />
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
@@ -109,15 +109,15 @@ function OrganizationJobsContent() {
             >
               Back to Organizations
             </Button>
-            <h1 className="text-3xl font-bold text-gray-900">Organization Job Analytics</h1>
+            <h1 className="text-3xl font-bold">Organization Job Analytics</h1>
             {stats && stats.organization_name && (
-              <p className="text-gray-600 mt-2">{stats.organization_name}</p>
+              <p className="text-muted-foreground mt-2">{stats.organization_name}</p>
             )}
-            <p className="text-gray-500 text-sm mt-1">Organization ID: {organizationId}</p>
+            <p className="text-muted-foreground text-sm mt-1">Organization ID: {organizationId}</p>
           </div>
 
           {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+            <div className="bg-destructive/15 border border-destructive text-destructive px-4 py-3 rounded mb-4">
               {error}
             </div>
           )}
@@ -230,61 +230,69 @@ function OrganizationJobsContent() {
                 </CardHeader>
                 <CardContent>
                   <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                    <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
-                      <div>
-                        <div className="text-sm text-gray-600">Completed</div>
-                        <div className="text-2xl font-bold text-green-700">
-                          {stats.completed_jobs}
+                    <Card>
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Completed</div>
+                          <div className="text-2xl font-bold">
+                            {stats.completed_jobs}
+                          </div>
                         </div>
-                      </div>
-                      <Badge variant="default" className="bg-green-600">
-                        {stats.total_jobs > 0
-                          ? ((stats.completed_jobs / stats.total_jobs) * 100).toFixed(0)
-                          : 0}%
-                      </Badge>
-                    </div>
+                        <Badge variant="default">
+                          {stats.total_jobs > 0
+                            ? ((stats.completed_jobs / stats.total_jobs) * 100).toFixed(0)
+                            : 0}%
+                        </Badge>
+                      </CardContent>
+                    </Card>
 
-                    <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
-                      <div>
-                        <div className="text-sm text-gray-600">In Progress</div>
-                        <div className="text-2xl font-bold text-blue-700">
-                          {stats.in_progress_jobs}
+                    <Card>
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">In Progress</div>
+                          <div className="text-2xl font-bold">
+                            {stats.in_progress_jobs}
+                          </div>
                         </div>
-                      </div>
-                      <Badge variant="secondary">
-                        {stats.total_jobs > 0
-                          ? ((stats.in_progress_jobs / stats.total_jobs) * 100).toFixed(0)
-                          : 0}%
-                      </Badge>
-                    </div>
+                        <Badge variant="secondary">
+                          {stats.total_jobs > 0
+                            ? ((stats.in_progress_jobs / stats.total_jobs) * 100).toFixed(0)
+                            : 0}%
+                        </Badge>
+                      </CardContent>
+                    </Card>
 
-                    <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg">
-                      <div>
-                        <div className="text-sm text-gray-600">Failed</div>
-                        <div className="text-2xl font-bold text-red-700">
-                          {stats.failed_jobs}
+                    <Card>
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Failed</div>
+                          <div className="text-2xl font-bold">
+                            {stats.failed_jobs}
+                          </div>
                         </div>
-                      </div>
-                      <Badge variant="destructive">
-                        {stats.total_jobs > 0
-                          ? ((stats.failed_jobs / stats.total_jobs) * 100).toFixed(0)
-                          : 0}%
-                      </Badge>
-                    </div>
+                        <Badge variant="destructive">
+                          {stats.total_jobs > 0
+                            ? ((stats.failed_jobs / stats.total_jobs) * 100).toFixed(0)
+                            : 0}%
+                        </Badge>
+                      </CardContent>
+                    </Card>
 
-                    <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                      <div>
-                        <div className="text-sm text-gray-600">Pending</div>
-                        <div className="text-2xl font-bold text-gray-700">
-                          {stats.total_jobs - stats.completed_jobs - stats.in_progress_jobs - stats.failed_jobs}
+                    <Card>
+                      <CardContent className="flex items-center justify-between p-4">
+                        <div>
+                          <div className="text-sm text-muted-foreground">Pending</div>
+                          <div className="text-2xl font-bold">
+                            {stats.total_jobs - stats.completed_jobs - stats.in_progress_jobs - stats.failed_jobs}
+                          </div>
                         </div>
-                      </div>
-                      <Badge variant="outline">
-                        {stats.total_jobs > 0
-                          ? (((stats.total_jobs - stats.completed_jobs - stats.in_progress_jobs - stats.failed_jobs) / stats.total_jobs) * 100).toFixed(0)
-                          : 0}%
-                      </Badge>
-                    </div>
+                        <Badge variant="outline">
+                          {stats.total_jobs > 0
+                            ? (((stats.total_jobs - stats.completed_jobs - stats.in_progress_jobs - stats.failed_jobs) / stats.total_jobs) * 100).toFixed(0)
+                            : 0}%
+                        </Badge>
+                      </CardContent>
+                    </Card>
                   </div>
                 </CardContent>
               </Card>
@@ -338,7 +346,7 @@ function OrganizationJobsContent() {
                 </CardHeader>
                 <CardContent>
                   {stats.top_teams.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
+                    <div className="text-center py-8 text-muted-foreground">
                       No team data available.
                     </div>
                   ) : (
@@ -395,7 +403,7 @@ function OrganizationJobsContent() {
               </Card>
             </>
           ) : (
-            <div className="text-center py-8 text-gray-500">
+            <div className="text-center py-8 text-muted-foreground">
               Organization not found.
             </div>
           )}
