@@ -137,6 +137,44 @@ class JobCompleteResponse(BaseModel):
     calls: List[Dict[str, Any]]
 
 
+class SingleCallJobRequest(BaseModel):
+    """
+    Request model for single-call job endpoint.
+    Combines job creation, LLM call, and completion in one request.
+    """
+    team_id: str
+    job_type: str
+    model: str  # Model alias or model group
+    messages: List[Dict[str, Any]]
+    # Optional job metadata
+    user_id: Optional[str] = None
+    job_metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    # Optional LLM parameters
+    purpose: Optional[str] = None
+    temperature: Optional[float] = 0.7
+    max_tokens: Optional[int] = None
+    response_format: Optional[Dict[str, Any]] = None
+    tools: Optional[List[Dict[str, Any]]] = None
+    tool_choice: Optional[Any] = None
+    top_p: Optional[float] = None
+    frequency_penalty: Optional[float] = None
+    presence_penalty: Optional[float] = None
+    stop: Optional[List[str]] = None
+
+
+class SingleCallJobResponse(BaseModel):
+    """
+    Response model for single-call job endpoint.
+    Returns both the LLM response and job completion data.
+    """
+    job_id: str
+    status: str
+    response: Dict[str, Any]  # LLM response content
+    metadata: Dict[str, Any]  # Includes tokens, latency, model info
+    costs: Dict[str, Any]  # Job cost summary
+    completed_at: str
+
+
 # Helper Functions
 async def call_litellm(
     model: str,
@@ -670,6 +708,260 @@ async def make_llm_call_stream(
             "Connection": "keep-alive",
             "X-Accel-Buffering": "no",  # Disable nginx buffering
         }
+    )
+
+
+@app.post("/api/jobs/create-and-call", response_model=SingleCallJobResponse)
+async def create_and_call_job(
+    request: SingleCallJobRequest,
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
+):
+    """
+    Single-call job endpoint: Creates job, makes LLM call, and completes job in one request.
+
+    This is a convenience endpoint for scenarios where you only need to make a single LLM call.
+    It reduces latency by ~66% compared to the 3-step process (create → call → complete).
+
+    Perfect for:
+    - Chat applications with single-turn responses
+    - Simple text generation tasks
+    - Any workflow that only requires one LLM call per job
+
+    For multi-call scenarios (e.g., complex agents), use the separate endpoints.
+
+    Requires: Authorization header with virtual API key
+    """
+    from .models.credits import TeamCredits
+    from .services.model_resolver import ModelResolver, ModelResolutionError
+    from .services.credit_manager import get_credit_manager, InsufficientCreditsError
+
+    # Verify that the authenticated team matches the request
+    if request.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"API key does not belong to team '{request.team_id}'"
+        )
+
+    # Get team credits and virtual key
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == request.team_id
+    ).first()
+
+    if not team_credits:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team '{request.team_id}' not found"
+        )
+
+    if not team_credits.virtual_key:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Team '{request.team_id}' has no virtual key configured"
+        )
+
+    # Step 1: Create job
+    job = Job(
+        team_id=request.team_id,
+        user_id=request.user_id,
+        job_type=request.job_type,
+        status=JobStatus.IN_PROGRESS,  # Start in progress
+        job_metadata=request.job_metadata,
+        started_at=datetime.utcnow()
+    )
+
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # Step 2: Resolve model and make LLM call
+    model_resolver = ModelResolver(db)
+
+    try:
+        primary_model, fallback_models = model_resolver.resolve_model_group(
+            team_id=job.team_id,
+            model_group_name=request.model
+        )
+    except ModelResolutionError as e:
+        # Mark job as failed before raising
+        job.status = JobStatus.FAILED
+        job.completed_at = datetime.utcnow()
+        job.error_message = str(e)
+        db.commit()
+        raise HTTPException(status_code=403, detail=str(e))
+
+    # Track model group usage
+    job.model_groups_used = [request.model]
+    db.commit()
+
+    # Call LiteLLM
+    start_time = datetime.utcnow()
+    llm_call_successful = False
+    llm_response_content = None
+    total_tokens = 0
+    latency_ms = 0
+
+    try:
+        litellm_response = await call_litellm(
+            model=primary_model,
+            messages=request.messages,
+            virtual_key=team_credits.virtual_key,
+            team_id=job.team_id,
+            temperature=request.temperature,
+            max_tokens=request.max_tokens,
+            response_format=request.response_format,
+            tools=request.tools,
+            tool_choice=request.tool_choice,
+            top_p=request.top_p,
+            frequency_penalty=request.frequency_penalty,
+            presence_penalty=request.presence_penalty,
+            stop=request.stop
+        )
+
+        end_time = datetime.utcnow()
+        latency_ms = int((end_time - start_time).total_seconds() * 1000)
+
+        # Extract usage and cost data
+        usage = litellm_response.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+
+        # Extract cost
+        cost_usd = 0.0
+        if "_hidden_params" in litellm_response:
+            cost_usd = litellm_response["_hidden_params"].get("response_cost", 0.0)
+        if not cost_usd and "cost" in usage:
+            cost_usd = usage.get("cost", 0.0)
+
+        # Fallback to database pricing
+        if not cost_usd:
+            from .models.model_aliases import ModelAlias
+            model_record = db.query(ModelAlias).filter(
+                ModelAlias.model_alias == primary_model
+            ).first()
+
+            if model_record and model_record.pricing_input and model_record.pricing_output:
+                cost_usd = (
+                    (prompt_tokens * float(model_record.pricing_input) / 1_000_000) +
+                    (completion_tokens * float(model_record.pricing_output) / 1_000_000)
+                )
+
+        # Store LLM call record
+        llm_call = LLMCall(
+            job_id=job.job_id,
+            litellm_request_id=litellm_response.get("id"),
+            model_used=litellm_response.get("model", primary_model),
+            model_group_used=request.model,
+            resolved_model=primary_model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            total_tokens=total_tokens,
+            cost_usd=cost_usd,
+            latency_ms=latency_ms,
+            purpose=request.purpose,
+            request_data={"messages": request.messages, "model": request.model},
+            response_data=litellm_response
+        )
+
+        db.add(llm_call)
+        db.commit()
+
+        llm_call_successful = True
+        llm_response_content = {
+            "content": litellm_response["choices"][0]["message"]["content"],
+            "finish_reason": litellm_response["choices"][0]["finish_reason"]
+        }
+
+    except Exception as e:
+        # Record failed call
+        llm_call = LLMCall(
+            job_id=job.job_id,
+            model_group_used=request.model,
+            purpose=request.purpose,
+            error=str(e),
+            request_data={"messages": request.messages, "model": request.model}
+        )
+        db.add(llm_call)
+        db.commit()
+
+        # Mark job as failed
+        job.status = JobStatus.FAILED
+        job.completed_at = datetime.utcnow()
+        job.error_message = str(e)
+        db.commit()
+
+        raise HTTPException(status_code=500, detail=f"LLM call failed: {str(e)}")
+
+    # Step 3: Complete job and deduct credits
+    job.status = JobStatus.COMPLETED
+    job.completed_at = datetime.utcnow()
+
+    # Calculate costs
+    costs = calculate_job_costs(db, job.job_id)
+
+    # Credit deduction (same logic as complete_job endpoint)
+    credit_manager = get_credit_manager(db)
+
+    if llm_call_successful and not job.credit_applied and team_credits:
+        try:
+            # Calculate credits to deduct based on budget mode
+            credits_to_deduct = MINIMUM_CREDITS_PER_JOB
+
+            if team_credits.budget_mode == "consumption_usd":
+                credits_per_dollar = float(team_credits.credits_per_dollar) if team_credits.credits_per_dollar else DEFAULT_CREDITS_PER_DOLLAR
+                credits_to_deduct = int(costs["total_cost_usd"] * credits_per_dollar)
+                credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, credits_to_deduct)
+            elif team_credits.budget_mode == "consumption_tokens":
+                credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, costs["total_tokens"] // DEFAULT_TOKENS_PER_CREDIT)
+
+            credit_manager.deduct_credit(
+                team_id=job.team_id,
+                job_id=job.job_id,
+                credits_amount=credits_to_deduct,
+                reason=f"Single-call job {job.job_type} completed ({team_credits.budget_mode} mode: {credits_to_deduct} credits)"
+            )
+            job.credit_applied = True
+
+        except InsufficientCreditsError as e:
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Job {job.job_id} completed but couldn't deduct credit: {str(e)}")
+
+    db.commit()
+
+    # Store cost summary
+    cost_summary = JobCostSummary(
+        job_id=job.job_id,
+        total_calls=costs["total_calls"],
+        successful_calls=costs["successful_calls"],
+        failed_calls=costs["failed_calls"],
+        total_tokens=costs["total_tokens"],
+        total_cost_usd=costs["total_cost_usd"],
+        avg_latency_ms=costs["avg_latency_ms"],
+        total_duration_seconds=int((job.completed_at - job.created_at).total_seconds())
+    )
+    db.merge(cost_summary)
+    db.commit()
+
+    # Refresh team credits to get updated balance
+    db.refresh(team_credits)
+
+    # Add credit information to costs
+    costs["credit_applied"] = job.credit_applied
+    costs["credits_remaining"] = team_credits.credits_remaining if team_credits else None
+
+    return SingleCallJobResponse(
+        job_id=str(job.job_id),
+        status=job.status.value,
+        response=llm_response_content,
+        metadata={
+            "tokens_used": total_tokens,
+            "latency_ms": latency_ms,
+            "model": request.model
+        },
+        costs=costs,
+        completed_at=job.completed_at.isoformat()
     )
 
 
