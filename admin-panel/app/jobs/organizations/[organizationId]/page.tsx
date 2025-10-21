@@ -102,13 +102,19 @@ function OrganizationJobsContent() {
       <main className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
           <div className="mb-6">
-            <Button
-              variant="outline"
-              onClick={() => router.push('/organizations')}
-              className="mb-4"
-            >
-              Back to Organizations
-            </Button>
+            <div className="flex gap-2 mb-4">
+              <Button
+                variant="outline"
+                onClick={() => router.push('/organizations')}
+              >
+                Back to Organizations
+              </Button>
+              <Button
+                onClick={() => router.push(`/organizations/${organizationId}/analytics`)}
+              >
+                View Analytics Dashboard
+              </Button>
+            </div>
             <h1 className="text-3xl font-bold">Organization Job Analytics</h1>
             {stats && stats.organization_name && (
               <p className="text-muted-foreground mt-2">{stats.organization_name}</p>

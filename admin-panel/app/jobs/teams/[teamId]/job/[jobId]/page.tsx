@@ -14,6 +14,7 @@ interface LLMCallDetail {
   call_id: string;
   model_used: string | null;
   model_group_used: string | null;
+  resolved_model: string | null;
   purpose: string | null;
   prompt_tokens: number;
   completion_tokens: number;
@@ -257,12 +258,12 @@ function JobDetailContent() {
                                   {call.call_id.substring(0, 8)}...
                                 </TableCell>
                                 <TableCell>
-                                  <div className="text-sm">
-                                    {call.model_used || 'N/A'}
+                                  <div className="text-sm font-medium">
+                                    {call.resolved_model || call.model_used || 'N/A'}
                                   </div>
                                   {call.model_group_used && (
                                     <div className="text-xs text-muted-foreground">
-                                      Group: {call.model_group_used}
+                                      Alias: {call.model_group_used}
                                     </div>
                                   )}
                                 </TableCell>
