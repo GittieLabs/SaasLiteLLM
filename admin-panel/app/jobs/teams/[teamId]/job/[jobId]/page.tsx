@@ -252,7 +252,7 @@ function JobDetailContent() {
                         <TableBody>
                           {jobDetail.calls.map((call) => (
                             <>
-                              <TableRow key={call.call_id} className="hover:bg-muted/50">
+                              <TableRow key={call.call_id}>
                                 <TableCell className="font-mono text-xs">
                                   {call.call_id.substring(0, 8)}...
                                 </TableCell>
