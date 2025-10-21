@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Building2, Users, Layers, LayoutDashboard, LogOut, Box, Shield } from 'lucide-react';
+import { Building2, Users, Layers, LayoutDashboard, LogOut, Box, Shield, Activity } from 'lucide-react';
 import { logout } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';

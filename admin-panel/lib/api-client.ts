@@ -134,4 +134,17 @@ export const api = {
     const queryParams = new URLSearchParams(params).toString();
     return request(`/api/admin-users/audit-logs${queryParams ? `?${queryParams}` : ''}`);
   },
+
+  // Jobs
+  getTeamJobs: (teamId: string, params?: any) => {
+    const queryParams = params ? new URLSearchParams(params).toString() : '';
+    return request(`/api/jobs/teams/${teamId}${queryParams ? `?${queryParams}` : ''}`);
+  },
+  getJobDetail: (teamId: string, jobId: string) => {
+    return request(`/api/jobs/teams/${teamId}/${jobId}`);
+  },
+  getOrganizationJobStats: (organizationId: string, params?: any) => {
+    const queryParams = params ? new URLSearchParams(params).toString() : '';
+    return request(`/api/jobs/organizations/${organizationId}/stats${queryParams ? `?${queryParams}` : ''}`);
+  },
 };
