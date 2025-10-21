@@ -508,6 +508,109 @@ async def make_llm_call(
     db.commit()
 
     return response
+
+## Model Tracking Fields
+
+### Understanding the Three Model Fields
+
+The `llm_calls` table tracks three different model identifiers to provide complete visibility into model resolution:
+
+| Field | Type | Description | Example Value |
+|-------|------|-------------|---------------|
+| `model_group_used` | string | The model group name requested by the application | `"ResumeAgent"` |
+| `resolved_model` | string | The model your system resolved to from the model group | `"gpt-4-turbo"` |
+| `model_used` | string | The actual model LiteLLM used (may differ if LiteLLM applies fallbacks) | `"gpt-4-turbo-2024-04-09"` |
+
+### Why Three Fields?
+
+This three-tier tracking provides complete audit trail:
+
+**Example Scenario:**
+
+1. **Application requests** `model_group="ResumeAgent"`
+2. **Your system resolves** to `resolved_model="gpt-4-turbo"` (from model group configuration)
+3. **LiteLLM returns** `model="gpt-4-turbo-2024-04-09"` (specific version/deployment)
+
+**Tracking All Three Allows:**
+
+- **`model_group_used`**: Track which logical model groups are most popular
+- **`resolved_model`**: Verify your resolution logic worked correctly
+- **`model_used`**: See the actual model/version LiteLLM used (important for cost tracking and debugging)
+
+### Typical Values
+
+```python
+# Example 1: Standard resolution
+{
+    "model_group_used": "ResumeAgent",      # What app requested
+    "resolved_model": "gpt-4-turbo",        # What you resolved to
+    "model_used": "gpt-4-turbo-2024-04-09"  # What LiteLLM used
+}
+
+# Example 2: Direct model request (not using model groups)
+{
+    "model_group_used": null,               # No group used
+    "resolved_model": "gpt-4",              # Direct model request
+    "model_used": "gpt-4-0613"              # Specific version used
+}
+
+# Example 3: Fallback scenario
+{
+    "model_group_used": "ResumeAgent",      # What app requested
+    "resolved_model": "gpt-4-turbo",        # What you resolved to
+    "model_used": "gpt-4"                   # LiteLLM fell back to this
+}
+```
+
+### Querying Model Usage
+
+**Track most-used model groups:**
+
+```sql
+SELECT
+    model_group_used,
+    COUNT(*) as call_count,
+    AVG(cost_usd) as avg_cost,
+    AVG(latency_ms) as avg_latency
+FROM llm_calls
+WHERE model_group_used IS NOT NULL
+AND created_at >= NOW() - INTERVAL '7 days'
+GROUP BY model_group_used
+ORDER BY call_count DESC;
+```
+
+**Verify resolution accuracy:**
+
+```sql
+-- Check if resolved models match actual models used
+SELECT
+    model_group_used,
+    resolved_model,
+    model_used,
+    COUNT(*) as instances
+FROM llm_calls
+WHERE model_group_used IS NOT NULL
+AND created_at >= NOW() - INTERVAL '1 day'
+GROUP BY model_group_used, resolved_model, model_used
+ORDER BY instances DESC;
+```
+
+**Detect unexpected fallbacks:**
+
+```sql
+-- Find cases where LiteLLM used a different model than resolved
+SELECT
+    job_id,
+    model_group_used,
+    resolved_model,
+    model_used,
+    created_at
+FROM llm_calls
+WHERE resolved_model != model_used
+AND model_group_used IS NOT NULL
+ORDER BY created_at DESC
+LIMIT 100;
+```
 ```
 
 ### Request Format
