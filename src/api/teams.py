@@ -25,6 +25,9 @@ class TeamCreateRequest(BaseModel):
     access_groups: List[str]  # List of model access group names
     credits_allocated: int = 0
     metadata: Optional[Dict[str, Any]] = {}
+    budget_mode: str = "job_based"  # 'job_based', 'consumption_usd', 'consumption_tokens'
+    credits_per_dollar: float = 10.0  # For consumption_usd mode
+    tokens_per_credit: int = 10000  # For consumption_tokens mode
 
 
 class TeamUpdateRequest(BaseModel):
@@ -197,13 +200,23 @@ async def create_team(
             detail=f"Failed to create team in LiteLLM: {str(e)}"
         )
 
-    # Create team credits with virtual key
+    # Validate budget_mode
+    if request.budget_mode not in ['job_based', 'consumption_usd', 'consumption_tokens']:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid budget_mode: {request.budget_mode}. Must be one of: job_based, consumption_usd, consumption_tokens"
+        )
+
+    # Create team credits with virtual key and budget configuration
     credits = TeamCredits(
         team_id=request.team_id,
         organization_id=request.organization_id,
         credits_allocated=request.credits_allocated,
         credits_used=0,
-        virtual_key=virtual_key
+        virtual_key=virtual_key,
+        budget_mode=request.budget_mode,
+        credits_per_dollar=request.credits_per_dollar,
+        tokens_per_credit=request.tokens_per_credit
     )
     db.add(credits)
     db.flush()
