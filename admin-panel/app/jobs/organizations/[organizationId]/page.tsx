@@ -86,6 +86,10 @@ function OrganizationJobsContent() {
     router.push(`/jobs/teams/${teamId}`);
   };
 
+  const handleViewTeamAnalytics = (teamId: string) => {
+    router.push(`/teams/${teamId}/analytics`);
+  };
+
   const calculateSuccessRate = () => {
     if (!stats || stats.total_llm_calls === 0) return 0;
     return ((stats.successful_calls / stats.total_llm_calls) * 100).toFixed(1);
@@ -110,6 +114,7 @@ function OrganizationJobsContent() {
                 Back to Organizations
               </Button>
               <Button
+                variant="default"
                 onClick={() => router.push(`/organizations/${organizationId}/analytics`)}
               >
                 View Analytics Dashboard
@@ -391,13 +396,22 @@ function OrganizationJobsContent() {
                                   : 0}%
                               </TableCell>
                               <TableCell>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleViewTeamJobs(team.team_id)}
-                                >
-                                  View Jobs
-                                </Button>
+                                <div className="flex gap-2">
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleViewTeamJobs(team.team_id)}
+                                  >
+                                    Jobs
+                                  </Button>
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    onClick={() => handleViewTeamAnalytics(team.team_id)}
+                                  >
+                                    Analytics
+                                  </Button>
+                                </div>
                               </TableCell>
                             </TableRow>
                           ))}
