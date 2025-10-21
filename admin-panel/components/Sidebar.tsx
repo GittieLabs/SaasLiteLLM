@@ -44,8 +44,8 @@ export default function Sidebar() {
               className={cn(
                 'flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
                 isActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
+                  ? 'bg-primary/10 text-primary border border-primary/20'
+                  : 'text-foreground hover:bg-muted'
               )}
             >
               <Icon className="h-5 w-5" />
@@ -55,7 +55,7 @@ export default function Sidebar() {
         })}
       </nav>
 
-      <div className="border-t p-4">
+      <div className="border-t px-3 py-4">
         <Button
           variant="outline"
           className="w-full justify-start gap-3"
