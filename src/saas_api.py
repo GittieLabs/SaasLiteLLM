@@ -517,12 +517,15 @@ async def make_llm_call_stream(
         job.model_groups_used.append(request.model)
         db.commit()
 
+    # Capture virtual_key before generator to avoid DetachedInstanceError
+    virtual_key_value = team_credits.virtual_key
+
     # Create streaming generator
     async def stream_llm_response():
         litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
 
         headers = {
-            "Authorization": f"Bearer {team_credits.virtual_key}",
+            "Authorization": f"Bearer {virtual_key_value}",
             "Content-Type": "application/json"
         }
 
