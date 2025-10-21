@@ -85,7 +85,9 @@ function TeamJobsContent() {
       if (endDate) params.end_date = endDate;
       if (jobIdFilter) params.job_id_filter = jobIdFilter;
 
+      console.log('Loading jobs for team:', teamId, 'with params:', params);
       const response: JobListResponse = await api.getTeamJobs(teamId, params);
+      console.log('Jobs response:', response);
 
       setJobs(response.jobs);
       setTotal(response.total);

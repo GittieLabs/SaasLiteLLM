@@ -126,7 +126,8 @@ async def list_team_jobs(
     # Apply filters
     if status:
         try:
-            query = query.filter(Job.status == JobStatus(status))
+            # Convert to uppercase for enum matching
+            query = query.filter(Job.status == JobStatus(status.upper()))
         except ValueError:
             raise HTTPException(
                 status_code=400,
