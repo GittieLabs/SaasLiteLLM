@@ -362,7 +362,7 @@ function OrganizationAnalyticsContent() {
                         cx="50%"
                         cy="50%"
                         outerRadius={100}
-                        label={(entry) => `${entry.provider}: $${entry.spend.toFixed(3)}`}
+                        label={(entry: any) => `${entry.provider}: $${entry.spend.toFixed(3)}`}
                       >
                         {analytics.provider_usage.map((entry, index) => (
                           <Cell key={`cell-${index}`} fill={PROVIDER_COLORS[entry.provider] || PROVIDER_COLORS.other} />
