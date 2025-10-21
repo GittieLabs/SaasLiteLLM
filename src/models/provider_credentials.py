@@ -7,6 +7,7 @@ from datetime import datetime
 from sqlalchemy import Column, String, DateTime, Text, Boolean, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
 from ..models.job_tracking import Base
+from ..utils.encryption import encrypt_api_key, decrypt_api_key
 import enum
 
 
@@ -66,10 +67,41 @@ class ProviderCredential(Base):
         }
 
     def to_dict_with_key(self):
-        """Convert to dictionary including decrypted API key (use carefully)"""
+        """
+        Convert to dictionary including decrypted API key (use carefully)
+
+        WARNING: This exposes the decrypted API key. Only use when necessary
+        and ensure the response is not logged or exposed to untrusted parties.
+        """
         data = self.to_dict()
-        data["api_key"] = self.api_key  # TODO: Add decryption logic
+        try:
+            data["api_key"] = decrypt_api_key(self.api_key)
+        except Exception as e:
+            # If decryption fails, indicate the issue
+            data["api_key"] = None
+            data["decryption_error"] = str(e)
         return data
+
+    def set_api_key(self, plain_api_key: str):
+        """
+        Set the API key with encryption.
+
+        Args:
+            plain_api_key: Plain text API key to encrypt and store
+        """
+        self.api_key = encrypt_api_key(plain_api_key)
+
+    def get_api_key(self) -> str:
+        """
+        Get the decrypted API key for use.
+
+        Returns:
+            str: Decrypted API key
+
+        Raises:
+            InvalidToken: If decryption fails
+        """
+        return decrypt_api_key(self.api_key)
 
     def __repr__(self):
         return f"<ProviderCredential {self.credential_name} ({self.provider.value}) for org {self.organization_id}>"
