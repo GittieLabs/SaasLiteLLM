@@ -116,6 +116,8 @@ class LLMCallRequest(BaseModel):
     frequency_penalty: Optional[float] = None
     presence_penalty: Optional[float] = None
     stop: Optional[List[str]] = None
+    # Call-specific metadata to append to job metadata
+    call_metadata: Optional[Dict[str, Any]] = None
 
 
 class LLMCallResponse(BaseModel):
@@ -128,6 +130,11 @@ class JobCompleteRequest(BaseModel):
     status: Literal["completed", "failed"]  # Only these two values are valid
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
     error_message: Optional[str] = None
+
+
+class JobMetadataUpdateRequest(BaseModel):
+    """Request model for appending metadata to a job"""
+    metadata: Dict[str, Any]
 
 
 class JobCompleteResponse(BaseModel):
@@ -460,6 +467,18 @@ async def make_llm_call(
         db.add(llm_call)
         db.commit()
         db.refresh(llm_call)
+
+        # Append call-specific metadata to job metadata if provided
+        if request.call_metadata:
+            if job.job_metadata is None:
+                job.job_metadata = {}
+
+            job.job_metadata.update(request.call_metadata)
+
+            # Mark the attribute as modified for SQLAlchemy to detect the change
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(job, 'job_metadata')
+            db.commit()
 
         # Return response (without exposing model or cost to client)
         return LLMCallResponse(
@@ -1139,6 +1158,58 @@ async def get_job(
         )
 
     return job.to_dict()
+
+
+@app.patch("/api/jobs/{job_id}/metadata")
+async def update_job_metadata(
+    job_id: str,
+    request: JobMetadataUpdateRequest,
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
+):
+    """
+    Append metadata to a job's existing metadata.
+
+    This endpoint allows teams to enrich job metadata during execution,
+    particularly useful for:
+    - Chat applications tracking conversation turns
+    - Multi-step agent workflows recording intermediate results
+    - Adding business context as the job progresses
+
+    The provided metadata will be merged with existing job metadata.
+
+    Requires: Authorization header with virtual API key
+    """
+    job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Verify job belongs to authenticated team
+    if job.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Job does not belong to your team"
+        )
+
+    # Initialize job_metadata if None
+    if job.job_metadata is None:
+        job.job_metadata = {}
+
+    # Merge new metadata with existing metadata
+    job.job_metadata.update(request.metadata)
+
+    # Mark the attribute as modified for SQLAlchemy to detect the change
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(job, 'job_metadata')
+
+    db.commit()
+    db.refresh(job)
+
+    return {
+        "job_id": str(job.job_id),
+        "metadata": job.job_metadata,
+        "updated_at": datetime.utcnow().isoformat()
+    }
 
 
 @app.get("/api/jobs/{job_id}/costs")
