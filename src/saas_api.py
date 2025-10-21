@@ -6,7 +6,7 @@ from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from sqlalchemy import create_engine, func
 from sqlalchemy.orm import sessionmaker, Session
 from datetime import datetime
@@ -17,6 +17,11 @@ from .config.settings import settings
 from .models.job_tracking import (
     Base, Job, LLMCall, JobCostSummary, TeamUsageSummary,
     WebhookRegistration, JobStatus
+)
+from .api.constants import (
+    DEFAULT_TOKENS_PER_CREDIT,
+    DEFAULT_CREDITS_PER_DOLLAR,
+    MINIMUM_CREDITS_PER_JOB
 )
 
 # Import new API routers
@@ -119,7 +124,7 @@ class LLMCallResponse(BaseModel):
 
 
 class JobCompleteRequest(BaseModel):
-    status: str  # "completed" or "failed"
+    status: Literal["completed", "failed"]  # Only these two values are valid
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
     error_message: Optional[str] = None
 
@@ -715,29 +720,29 @@ async def complete_job(
 
     # Deduct credit only if:
     # 1. Job status is "completed" (not "failed")
-    # 2. No failed LLM calls
-    # 3. Credit hasn't already been applied
+    # 2. Credit hasn't already been applied
+    # Note: We trust the client's status field - if they mark as "completed", we charge
+    # This allows retries where some calls fail but job ultimately succeeds
     if (request.status == "completed" and
-        costs["failed_calls"] == 0 and
         not job.credit_applied and
         team_credits):
 
         try:
             # Calculate credits to deduct based on budget mode
-            credits_to_deduct = 1  # Default: job_based
+            credits_to_deduct = MINIMUM_CREDITS_PER_JOB  # Default: job_based (1 credit)
 
             if team_credits.budget_mode == "consumption_usd":
                 # Credits based on actual USD cost
-                # credits_per_dollar defaults to 10 (1 credit = $0.10)
-                credits_per_dollar = float(team_credits.credits_per_dollar) if team_credits.credits_per_dollar else 10.0
+                # Use team-specific or default credits_per_dollar
+                credits_per_dollar = float(team_credits.credits_per_dollar) if team_credits.credits_per_dollar else DEFAULT_CREDITS_PER_DOLLAR
                 credits_to_deduct = int(costs["total_cost_usd"] * credits_per_dollar)
                 # Minimum 1 credit for any successful job
-                credits_to_deduct = max(1, credits_to_deduct)
+                credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, credits_to_deduct)
             elif team_credits.budget_mode == "consumption_tokens":
                 # Credits based on tokens used
-                # 1 credit = 10,000 tokens
-                credits_to_deduct = max(1, costs["total_tokens"] // 10000)
-            # else: job_based mode, use default 1 credit
+                # Use default tokens per credit (10,000)
+                credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, costs["total_tokens"] // DEFAULT_TOKENS_PER_CREDIT)
+            # else: job_based mode, use MINIMUM_CREDITS_PER_JOB (1 credit)
 
             # Deduct credits
             credit_manager.deduct_credit(
