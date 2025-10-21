@@ -362,6 +362,251 @@ No credit limits:
 - Track usage for billing
 - Typically for enterprise contracts
 
+## Credit Replenishment
+
+Add credits to teams from payments (subscriptions or one-time purchases).
+
+### Replenishing from Payment
+
+When a client pays for credits, use the replenish endpoint:
+
+**API Endpoint:** `POST /api/credits/teams/{team_id}/replenish`
+
+**Authentication:** Admin only (JWT Bearer token or X-Admin-Key header)
+
+```bash
+curl -X POST http://localhost:8003/api/credits/teams/acme-prod/replenish \
+  -H "Authorization: Bearer your-admin-jwt" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "credits": 5000,
+    "payment_type": "subscription",
+    "payment_amount_usd": 499.00,
+    "reason": "November 2024 subscription payment"
+  }'
+```
+
+**Response:**
+```json
+{
+  "team_id": "acme-prod",
+  "credits_added": 5000,
+  "credits_before": 1250,
+  "credits_after": 6250,
+  "payment_type": "subscription",
+  "payment_amount_usd": 499.00,
+  "transaction": {
+    "transaction_id": "txn_abc123",
+    "transaction_type": "subscription_payment",
+    "credits_amount": 5000,
+    "credits_before": 1250,
+    "credits_after": 6250,
+    "reason": "November 2024 subscription payment ($499.00 USD)",
+    "created_at": "2024-11-01T00:00:00Z"
+  }
+}
+```
+
+### Payment Types
+
+**Subscription Payment:**
+```bash
+{
+  "payment_type": "subscription",
+  "credits": 5000,
+  "payment_amount_usd": 499.00
+}
+```
+- Recurring monthly/annual payments
+- Updates `last_refill_at` timestamp
+- Creates `subscription_payment` transaction
+
+**One-Time Payment:**
+```bash
+{
+  "payment_type": "one_time",
+  "credits": 1000,
+  "payment_amount_usd": 99.00
+}
+```
+- Ad-hoc credit purchases
+- Top-ups or overages
+- Creates `one_time_payment` transaction
+
+### Auto-Refill Configuration
+
+Set up automatic credit refills tied to subscription billing:
+
+**API Endpoint:** `POST /api/credits/teams/{team_id}/configure-auto-refill`
+
+```bash
+curl -X POST http://localhost:8003/api/credits/teams/acme-prod/configure-auto-refill \
+  -H "Authorization: Bearer your-admin-jwt" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "enabled": true,
+    "refill_amount": 5000,
+    "refill_period": "monthly"
+  }'
+```
+
+**Response:**
+```json
+{
+  "team_id": "acme-prod",
+  "auto_refill_enabled": true,
+  "refill_amount": 5000,
+  "refill_period": "monthly",
+  "last_refill_at": "2024-11-01T00:00:00Z",
+  "message": "Auto-refill enabled successfully"
+}
+```
+
+**Refill Periods:**
+- `monthly` - Refill once per month
+- `weekly` - Refill once per week
+- `daily` - Refill once per day
+
+### Disabling Auto-Refill
+
+```bash
+curl -X POST http://localhost:8003/api/credits/teams/acme-prod/configure-auto-refill \
+  -H "Authorization: Bearer your-admin-jwt" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "enabled": false
+  }'
+```
+
+### Integration with Payment Processors
+
+**Example: Stripe Webhook Handler**
+
+```python
+import requests
+from datetime import datetime
+
+def handle_stripe_subscription_payment(event):
+    """Handle successful subscription payment from Stripe"""
+    subscription = event['data']['object']
+    customer_id = subscription['customer']
+    amount_paid = subscription['latest_invoice']['amount_paid'] / 100  # cents to dollars
+
+    # Map Stripe customer to team_id
+    team_id = get_team_id_from_stripe_customer(customer_id)
+
+    # Calculate credits based on plan
+    credits_to_add = calculate_credits_from_amount(amount_paid)
+
+    # Replenish credits
+    response = requests.post(
+        f"http://localhost:8003/api/credits/teams/{team_id}/replenish",
+        headers={"Authorization": f"Bearer {ADMIN_JWT}"},
+        json={
+            "credits": credits_to_add,
+            "payment_type": "subscription",
+            "payment_amount_usd": amount_paid,
+            "reason": f"Stripe subscription payment - {subscription['id']}"
+        }
+    )
+
+    return response.json()
+```
+
+### Transaction Tracking
+
+All replenishments create audit trail transactions:
+
+**View Replenishment History:**
+```bash
+curl "http://localhost:8003/api/credits/teams/acme-prod/transactions?limit=50" \
+  -H "Authorization: Bearer sk-virtual-key"
+```
+
+**Response showing replenishment transactions:**
+```json
+{
+  "team_id": "acme-prod",
+  "total": 3,
+  "transactions": [
+    {
+      "transaction_id": "txn_abc123",
+      "transaction_type": "subscription_payment",
+      "credits_amount": 5000,
+      "credits_before": 1250,
+      "credits_after": 6250,
+      "reason": "November 2024 subscription payment ($499.00 USD)",
+      "created_at": "2024-11-01T00:00:00Z"
+    },
+    {
+      "transaction_id": "txn_abc122",
+      "transaction_type": "one_time_payment",
+      "credits_amount": 1000,
+      "credits_before": 250,
+      "credits_after": 1250,
+      "reason": "Additional credits purchase ($99.00 USD)",
+      "created_at": "2024-10-15T10:30:00Z"
+    }
+  ]
+}
+```
+
+### Replenishment Best Practices
+
+1. **Track Payment References**
+   - Include payment processor ID in reason field
+   - Enables reconciliation between payments and credits
+
+2. **Validate Before Replenishing**
+   - Verify payment completed successfully
+   - Check for duplicate webhook events
+   - Implement idempotency
+
+3. **Monitor Refill Timing**
+   - Check `last_refill_at` timestamp
+   - Prevent duplicate monthly refills
+   - Handle edge cases (failed payments, cancellations)
+
+4. **Automate Subscription Refills**
+   - Enable auto-refill for subscription customers
+   - Configure appropriate refill_period
+   - Decouple from manual payment processing
+
+### Example Workflow: Monthly Subscription
+
+```python
+# 1. Customer subscribes to $99/month plan (1000 credits)
+team_id = "customer-prod"
+monthly_credits = 1000
+
+# 2. Configure auto-refill
+requests.post(
+    f"http://localhost:8003/api/credits/teams/{team_id}/configure-auto-refill",
+    headers={"Authorization": f"Bearer {ADMIN_JWT}"},
+    json={
+        "enabled": True,
+        "refill_amount": monthly_credits,
+        "refill_period": "monthly"
+    }
+)
+
+# 3. On payment success (e.g., Stripe webhook)
+def on_payment_success(amount_usd, team_id):
+    requests.post(
+        f"http://localhost:8003/api/credits/teams/{team_id}/replenish",
+        headers={"Authorization": f"Bearer {ADMIN_JWT}"},
+        json={
+            "credits": monthly_credits,
+            "payment_type": "subscription",
+            "payment_amount_usd": amount_usd,
+            "reason": f"Monthly subscription - {datetime.now().strftime('%B %Y')}"
+        }
+    )
+
+# 4. Customer usage tracked normally
+# 5. Next month, repeat step 3 on next payment
+```
+
 ## Client Communication
 
 ### Credit Allocation Email

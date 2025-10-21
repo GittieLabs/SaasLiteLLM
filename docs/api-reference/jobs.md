@@ -447,6 +447,227 @@ curl -X POST http://localhost:8003/api/jobs/{job_id}/complete \
 
 ---
 
+### Update Job Metadata
+
+Append metadata to a job during execution. Useful for enriching job context as work progresses.
+
+**Endpoint:** `PATCH /api/jobs/{job_id}/metadata`
+
+**Authentication:** Required (virtual key)
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `job_id` | string (UUID) | The job identifier |
+
+**Request Body:**
+
+```json
+{
+  "metadata": {
+    "conversation_turn": 3,
+    "user_sentiment": "positive",
+    "tokens_so_far": 450
+  }
+}
+```
+
+**Request Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `metadata` | object | Yes | Metadata to merge with existing job metadata |
+
+**Response (200 OK):**
+
+```json
+{
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "metadata": {
+    "document_id": "doc_123",
+    "conversation_turn": 3,
+    "user_sentiment": "positive",
+    "tokens_so_far": 450
+  },
+  "updated_at": "2025-10-14T12:03:45.000Z"
+}
+```
+
+**Example Request:**
+
+=== "cURL"
+
+    ```bash
+    curl -X PATCH http://localhost:8003/api/jobs/550e8400-e29b-41d4-a716-446655440000/metadata \
+      -H "Authorization: Bearer sk-your-virtual-key" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "metadata": {
+          "conversation_turn": 3,
+          "user_sentiment": "positive"
+        }
+      }'
+    ```
+
+=== "Python"
+
+    ```python
+    response = requests.patch(
+        f"{API_URL}/jobs/{job_id}/metadata",
+        headers=headers,
+        json={
+            "metadata": {
+                "conversation_turn": 3,
+                "user_sentiment": "positive"
+            }
+        }
+    )
+
+    result = response.json()
+    print(f"Updated metadata: {result['metadata']}")
+    ```
+
+=== "JavaScript"
+
+    ```javascript
+    const response = await fetch(`${API_URL}/jobs/${jobId}/metadata`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${VIRTUAL_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        metadata: {
+          conversation_turn: 3,
+          user_sentiment: 'positive'
+        }
+      })
+    });
+
+    const result = await response.json();
+    console.log(`Updated metadata:`, result.metadata);
+    ```
+
+**Use Cases:**
+
+1. **Chat Applications**
+   - Track conversation history
+   - Record turn numbers
+   - Store user sentiment or feedback
+
+2. **Multi-Step Workflows**
+   - Record intermediate results
+   - Track progress through pipeline
+   - Store decision points
+
+3. **Agent Workflows**
+   - Log tool calls and results
+   - Track reasoning steps
+   - Record agent state changes
+
+**Example: Chat Application Tracking**
+
+```python
+# Create job for chat session
+job_response = requests.post(
+    f"{API_URL}/jobs/create",
+    headers=headers,
+    json={
+        "team_id": "acme-corp",
+        "job_type": "chat_session",
+        "metadata": {
+            "session_id": "sess_123",
+            "user_id": "user_456"
+        }
+    }
+)
+job_id = job_response.json()["job_id"]
+
+# User turn 1
+llm_response_1 = requests.post(
+    f"{API_URL}/jobs/{job_id}/llm-call",
+    headers=headers,
+    json={
+        "model": "gpt-4",
+        "messages": messages_turn_1,
+        "call_metadata": {
+            "turn": 1,
+            "user_message": "How do I deploy to production?"
+        }
+    }
+)
+
+# Update job metadata after turn 1
+requests.patch(
+    f"{API_URL}/jobs/{job_id}/metadata",
+    headers=headers,
+    json={
+        "metadata": {
+            "turns_completed": 1,
+            "last_topic": "deployment"
+        }
+    }
+)
+
+# User turn 2
+llm_response_2 = requests.post(
+    f"{API_URL}/jobs/{job_id}/llm-call",
+    headers=headers,
+    json={
+        "model": "gpt-4",
+        "messages": messages_turn_2,
+        "call_metadata": {
+            "turn": 2,
+            "user_message": "What about environment variables?"
+        }
+    }
+)
+
+# Update metadata after turn 2
+requests.patch(
+    f"{API_URL}/jobs/{job_id}/metadata",
+    headers=headers,
+    json={
+        "metadata": {
+            "turns_completed": 2,
+            "last_topic": "environment_configuration"
+        }
+    }
+)
+
+# Complete the chat session
+requests.post(
+    f"{API_URL}/jobs/{job_id}/complete",
+    headers=headers,
+    json={
+        "status": "completed",
+        "metadata": {
+            "satisfaction_rating": 5,
+            "resolved": True
+        }
+    }
+)
+```
+
+**Error Responses:**
+
+| Status Code | Error | Description |
+|-------------|-------|-------------|
+| 401 | Unauthorized | Invalid or missing virtual key |
+| 403 | Forbidden | Job does not belong to your team |
+| 404 | Not Found | Job not found |
+| 422 | Validation Error | Invalid metadata format |
+
+**Notes:**
+
+- Metadata is merged with existing job metadata (not replaced)
+- Use dot notation or nested objects to organize metadata
+- Metadata persists through job lifecycle and is returned in job details
+- Maximum metadata size: 10KB per job
+
+---
+
 ### Single-Call Job (Create, Call, and Complete)
 
 Create a job, make a single LLM call, and complete the job in one request. This is a convenience endpoint for simple workflows that only need one LLM call.
