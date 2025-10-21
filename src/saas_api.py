@@ -444,9 +444,9 @@ async def make_llm_call(
         llm_call = LLMCall(
             job_id=job.job_id,
             litellm_request_id=litellm_response.get("id"),
-            model_used=litellm_response.get("model", primary_model),
+            model_used=primary_model,
             model_group_used=request.model,
-            resolved_model=primary_model,
+            resolved_model=litellm_response.get("model", primary_model),
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
@@ -671,7 +671,7 @@ async def make_llm_call_stream(
                 litellm_request_id=litellm_request_id,
                 model_used=primary_model,
                 model_group_used=request.model,
-                resolved_model=primary_model,
+                resolved_model=primary_model,  # For streaming, we don't get actual model in response
                 prompt_tokens=accumulated_tokens["prompt"],
                 completion_tokens=accumulated_tokens["completion"],
                 total_tokens=accumulated_tokens["total"],
@@ -852,9 +852,9 @@ async def create_and_call_job(
         llm_call = LLMCall(
             job_id=job.job_id,
             litellm_request_id=litellm_response.get("id"),
-            model_used=litellm_response.get("model", primary_model),
+            model_used=primary_model,
             model_group_used=request.model,
-            resolved_model=primary_model,
+            resolved_model=litellm_response.get("model", primary_model),
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
