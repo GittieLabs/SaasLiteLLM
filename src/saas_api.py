@@ -25,7 +25,7 @@ from .api.constants import (
 )
 
 # Import new API routers
-from .api import organizations, model_groups, teams, credits, dashboard, models, model_access_groups, admin_users, jobs
+from .api import organizations, model_groups, teams, credits, dashboard, models, model_access_groups, admin_users, jobs, provider_credentials
 
 # Import authentication
 from .auth.dependencies import verify_virtual_key
@@ -62,6 +62,7 @@ app.include_router(dashboard.router)
 app.include_router(models.router)
 app.include_router(model_access_groups.router)
 app.include_router(jobs.router)
+app.include_router(provider_credentials.router)
 
 # Database setup
 engine = create_engine(settings.database_url)
