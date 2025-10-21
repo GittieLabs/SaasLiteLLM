@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api-client';
 import { BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
@@ -45,6 +46,27 @@ interface OrganizationAnalytics {
   }>;
 }
 
+interface OrganizationJobStats {
+  organization_id: string;
+  organization_name: string | null;
+  total_jobs: number;
+  completed_jobs: number;
+  failed_jobs: number;
+  in_progress_jobs: number;
+  total_teams: number;
+  total_llm_calls: number;
+  successful_calls: number;
+  failed_calls: number;
+  total_tokens: number;
+  total_cost_usd: number;
+  total_credits_used: number;
+  top_teams: Array<{
+    team_id: string;
+    job_count: number;
+    credits_used: number;
+  }>;
+}
+
 const PROVIDER_COLORS: Record<string, string> = {
   openai: '#10A37F',
   anthropic: '#D97706',
@@ -67,12 +89,13 @@ function OrganizationAnalyticsContent() {
   const organizationId = params.organizationId as string;
 
   const [analytics, setAnalytics] = useState<OrganizationAnalytics | null>(null);
+  const [jobStats, setJobStats] = useState<OrganizationJobStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   // Date filters
   const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
+  const [endDate] = useState('');
 
   const loadAnalytics = async () => {
     try {
@@ -83,8 +106,13 @@ function OrganizationAnalyticsContent() {
       if (startDate) params.start_date = startDate;
       if (endDate) params.end_date = endDate;
 
-      const response: OrganizationAnalytics = await api.getOrganizationAnalytics(organizationId, params);
-      setAnalytics(response);
+      const [analyticsResponse, jobStatsResponse] = await Promise.all([
+        api.getOrganizationAnalytics(organizationId, params),
+        api.getOrganizationJobStats(organizationId, params)
+      ]);
+
+      setAnalytics(analyticsResponse);
+      setJobStats(jobStatsResponse);
     } catch (err: any) {
       console.error('Failed to load organization analytics:', err);
       setError(err.message || 'Failed to load organization analytics');
