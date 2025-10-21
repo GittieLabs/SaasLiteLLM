@@ -257,9 +257,9 @@ export default function OrganizationsPage() {
                           <TableCell className="font-mono text-sm">{org.organization_id}</TableCell>
                           <TableCell className="font-medium">{org.name}</TableCell>
                           <TableCell>
-                            <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-1 text-xs font-medium text-green-700">
+                            <Badge variant={org.status === 'active' ? 'default' : 'secondary'}>
                               {org.status}
-                            </span>
+                            </Badge>
                           </TableCell>
                           <TableCell>{new Date(org.created_at).toLocaleDateString()}</TableCell>
                           <TableCell className="text-right">
@@ -269,7 +269,7 @@ export default function OrganizationsPage() {
                               onClick={() => router.push(`/jobs/organizations/${org.organization_id}`)}
                               title="View organization analytics"
                             >
-                              <Activity className="h-4 w-4 text-blue-500" />
+                              <Activity className="h-4 w-4" />
                             </Button>
                           </TableCell>
                         </TableRow>
