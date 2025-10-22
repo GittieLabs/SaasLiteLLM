@@ -1002,6 +1002,7 @@ async def complete_job(
     Requires: Authorization header with virtual API key
     """
     from .services.credit_manager import get_credit_manager, InsufficientCreditsError
+    from .models.credits import TeamCredits
 
     job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
     if not job:
@@ -1117,11 +1118,8 @@ async def complete_job(
         for call in calls
     ]
 
-    # Get updated credit balance
-    from .models.credits import TeamCredits
-    team_credits = db.query(TeamCredits).filter(
-        TeamCredits.team_id == job.team_id
-    ).first()
+    # Get updated credit balance (refresh the existing team_credits object)
+    db.refresh(team_credits)
 
     # Add credit information to costs
     costs["credit_applied"] = job.credit_applied
