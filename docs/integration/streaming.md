@@ -152,6 +152,152 @@ result = requests.post(
 print(f"\nCredits remaining: {result['costs']['credits_remaining']}")
 ```
 
+## Single-Call Streaming (Easiest Option)
+
+For applications that only need to make one LLM call per job (like simple chat messages), use the **single-call streaming endpoint** that combines all three steps into one request:
+
+**`POST /api/jobs/create-and-call-stream`**
+
+This endpoint:
+- Creates the job
+- Streams the LLM response via SSE
+- Automatically completes the job and deducts credits
+
+Perfect for chat applications that need real-time streaming without the complexity of managing job lifecycle.
+
+### Using Single-Call Streaming
+
+```python
+import requests
+import json
+
+API_URL = "http://localhost:8003/api"
+VIRTUAL_KEY = "sk-your-virtual-key-here"
+
+headers = {
+    "Authorization": f"Bearer {VIRTUAL_KEY}",
+    "Content-Type": "application/json"
+}
+
+# Single request streams the entire response
+response = requests.post(
+    f"{API_URL}/jobs/create-and-call-stream",
+    headers=headers,
+    json={
+        "team_id": "acme-corp",
+        "job_type": "chat",
+        "model": "gpt-4",
+        "messages": [
+            {"role": "user", "content": "Tell me a short story"}
+        ]
+    },
+    stream=True  # Important: enable streaming
+)
+
+# Process Server-Sent Events
+accumulated = ""
+for line in response.iter_lines():
+    if line:
+        line = line.decode('utf-8')
+        if line.startswith('data: '):
+            data_str = line[6:]  # Remove 'data: ' prefix
+
+            if data_str == '[DONE]':
+                print("\n\nStream complete!")
+                break
+
+            try:
+                chunk = json.loads(data_str)
+                if chunk.get("choices"):
+                    delta = chunk["choices"][0].get("delta", {})
+                    content = delta.get("content", "")
+                    if content:
+                        accumulated += content
+                        print(content, end="", flush=True)
+            except json.JSONDecodeError:
+                continue
+
+print(f"\nFull response: {accumulated}")
+```
+
+### Single-Call vs Multi-Step Streaming
+
+| Feature | Single-Call Streaming | Multi-Step Streaming |
+|---------|---------------------|---------------------|
+| **Endpoints** | 1 request | 3 requests (create → stream → complete) |
+| **Use Case** | Simple chat, one LLM call per job | Complex agents, multiple LLM calls |
+| **Latency** | Lowest (~300ms TTFT) | Slightly higher (~350ms TTFT) |
+| **Credit Deduction** | Automatic after stream | Manual via complete endpoint |
+| **Job Control** | Automatic | Full control |
+| **Best For** | Chat apps, simple queries | Multi-step workflows, agents |
+
+**When to use Single-Call Streaming:**
+- ✅ Chat applications with one message per job
+- ✅ Simple Q&A interfaces
+- ✅ You want the simplest possible integration
+- ✅ Each user message = one job
+
+**When to use Multi-Step Streaming:**
+- ✅ Agent workflows with multiple LLM calls
+- ✅ Complex multi-step processes
+- ✅ You need full control over job lifecycle
+- ✅ Multiple LLM calls per job
+
+### Single-Call with Async
+
+```python
+import httpx
+import asyncio
+import json
+
+async def streaming_chat():
+    API_URL = "http://localhost:8003/api"
+    VIRTUAL_KEY = "sk-your-virtual-key-here"
+
+    headers = {
+        "Authorization": f"Bearer {VIRTUAL_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    async with httpx.AsyncClient() as client:
+        async with client.stream(
+            "POST",
+            f"{API_URL}/jobs/create-and-call-stream",
+            headers=headers,
+            json={
+                "team_id": "acme-corp",
+                "job_type": "chat",
+                "model": "gpt-4",
+                "messages": [
+                    {"role": "user", "content": "Write a haiku about Python"}
+                ],
+                "temperature": 0.7
+            },
+            timeout=30.0
+        ) as response:
+            accumulated = ""
+            async for line in response.aiter_lines():
+                if line.startswith("data: "):
+                    data_str = line[6:]
+
+                    if data_str == "[DONE]":
+                        break
+
+                    try:
+                        chunk = json.loads(data_str)
+                        if chunk.get("choices"):
+                            content = chunk["choices"][0].get("delta", {}).get("content", "")
+                            if content:
+                                accumulated += content
+                                print(content, end="", flush=True)
+                    except json.JSONDecodeError:
+                        continue
+
+            print(f"\n\nComplete response: {accumulated}")
+
+asyncio.run(streaming_chat())
+```
+
 ### SSE Chunk Format
 
 Each streaming chunk follows this format:
