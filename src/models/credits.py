@@ -6,6 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from datetime import datetime
 import uuid
 from .job_tracking import Base
+from ..utils.datetime_helpers import to_utc_isoformat
 
 
 class TeamCredits(Base):
@@ -30,6 +31,7 @@ class TeamCredits(Base):
     budget_mode = Column(String(50), default='job_based', nullable=False)  # 'job_based', 'consumption_usd', 'consumption_tokens'
     credits_per_dollar = Column(Numeric(10, 2), default=10.0)  # Conversion rate for consumption_usd mode
     tokens_per_credit = Column(Integer, default=10000)  # Conversion rate for consumption_tokens mode
+    cost_markup_percentage = Column(Numeric(5, 2), default=0.00)  # Markup percentage (e.g., 50.00 = 50% markup)
     status = Column(String(20), default='active', nullable=False)  # 'active', 'suspended', 'paused'
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
@@ -50,13 +52,14 @@ class TeamCredits(Base):
             "auto_refill": self.auto_refill,
             "refill_amount": self.refill_amount,
             "refill_period": self.refill_period,
-            "last_refill_at": self.last_refill_at.isoformat() if self.last_refill_at else None,
+            "last_refill_at": to_utc_isoformat(self.last_refill_at),
             "budget_mode": self.budget_mode,
             "credits_per_dollar": float(self.credits_per_dollar) if self.credits_per_dollar else 10.0,
             "tokens_per_credit": self.tokens_per_credit if self.tokens_per_credit else 10000,
+            "cost_markup_percentage": float(self.cost_markup_percentage) if self.cost_markup_percentage else 0.0,
             "status": self.status,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None
+            "created_at": to_utc_isoformat(self.created_at),
+            "updated_at": to_utc_isoformat(self.updated_at)
         }
 
 
@@ -95,5 +98,5 @@ class CreditTransaction(Base):
             "credits_before": self.credits_before,
             "credits_after": self.credits_after,
             "reason": self.reason,
-            "created_at": self.created_at.isoformat() if self.created_at else None
+            "created_at": to_utc_isoformat(self.created_at)
         }
