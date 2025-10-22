@@ -1081,6 +1081,9 @@ async def create_and_call_job_stream(
 
     # Create streaming generator
     async def stream_and_complete():
+        # Send immediate keepalive to establish connection
+        yield ": keepalive\n\n"
+
         litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
 
         headers = {
