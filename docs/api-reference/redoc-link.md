@@ -8,7 +8,9 @@ For complete, interactive API documentation, use the auto-generated API docs pro
 
 **Beautiful, responsive API documentation with examples**
 
-[:octicons-link-external-24: Open ReDoc Documentation](http://localhost:8003/redoc){ .md-button .md-button--primary }
+[:octicons-link-external-24: Open ReDoc Documentation (Production)](https://llm-saas.usegittie.com/redoc){ .md-button .md-button--primary }
+
+[:octicons-link-external-24: Open ReDoc Documentation (Local)](http://localhost:8003/redoc){ .md-button }
 
 ReDoc provides:
 - ✅ Clean, professional interface
@@ -27,7 +29,9 @@ ReDoc provides:
 
 **Interactive API explorer with "Try it out" functionality**
 
-[:octicons-link-external-24: Open Swagger UI](http://localhost:8003/docs){ .md-button }
+[:octicons-link-external-24: Open Swagger UI (Production)](https://llm-saas.usegittie.com/docs){ .md-button }
+
+[:octicons-link-external-24: Open Swagger UI (Local)](http://localhost:8003/docs){ .md-button }
 
 Swagger UI provides:
 - ✅ Try API calls directly in the browser
@@ -68,9 +72,12 @@ Both interfaces provide complete documentation for:
 
 ### Jobs API
 - Create jobs
-- Make LLM calls (streaming and non-streaming)
+- Single-call job endpoints (streaming and non-streaming)
+  - `POST /api/jobs/create-and-call` - Non-streaming single-call
+  - `POST /api/jobs/create-and-call-stream` - **Streaming single-call (SSE)**
+- Make LLM calls within jobs
 - Complete jobs
-- Get job details
+- Get job details and costs
 
 ### Credits API
 - Check credit balance
@@ -94,7 +101,7 @@ Both interfaces provide complete documentation for:
 
     Beautiful, responsive documentation
 
-    [:octicons-arrow-right-24: http://localhost:8003/redoc](http://localhost:8003/redoc)
+    [:octicons-arrow-right-24: Production](https://llm-saas.usegittie.com/redoc) | [:octicons-arrow-right-24: Local](http://localhost:8003/redoc)
 
 -   **:material-test-tube: Swagger UI**
 
@@ -102,7 +109,7 @@ Both interfaces provide complete documentation for:
 
     Interactive API testing interface
 
-    [:octicons-arrow-right-24: http://localhost:8003/docs](http://localhost:8003/docs)
+    [:octicons-arrow-right-24: Production](https://llm-saas.usegittie.com/docs) | [:octicons-arrow-right-24: Local](http://localhost:8003/docs)
 
 -   **:material-code-json: OpenAPI Spec**
 
@@ -110,7 +117,7 @@ Both interfaces provide complete documentation for:
 
     Download OpenAPI 3.0 specification
 
-    [:octicons-arrow-right-24: http://localhost:8003/openapi.json](http://localhost:8003/openapi.json)
+    [:octicons-arrow-right-24: Production](https://llm-saas.usegittie.com/openapi.json) | [:octicons-arrow-right-24: Local](http://localhost:8003/openapi.json)
 
 </div>
 
@@ -161,10 +168,10 @@ curl http://localhost:8003/openapi.json > saas-api-spec.json
 
 When deploying to production, the API documentation will be available at:
 
-| Environment | ReDoc | Swagger UI |
-|-------------|-------|------------|
-| **Local** | http://localhost:8003/redoc | http://localhost:8003/docs |
-| **Production** | https://your-domain.com/redoc | https://your-domain.com/docs |
+| Environment | ReDoc | Swagger UI | OpenAPI Spec |
+|-------------|-------|------------|--------------|
+| **Production** | https://llm-saas.usegittie.com/redoc | https://llm-saas.usegittie.com/docs | https://llm-saas.usegittie.com/openapi.json |
+| **Local** | http://localhost:8003/redoc | http://localhost:8003/docs | http://localhost:8003/openapi.json |
 
 ---
 
