@@ -239,7 +239,7 @@ function JobDetailContent() {
                     <div className="space-y-2">
                       <div className="text-sm text-muted-foreground">Provider Cost (What YOU Pay)</div>
                       <div className="text-2xl font-bold text-red-600">
-                        ${jobDetail.calls.reduce((sum, call) => sum + call.provider_cost_usd, 0).toFixed(6)}
+                        ${jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0).toFixed(6)}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         Your cost to LiteLLM/OpenAI/Anthropic
@@ -248,7 +248,7 @@ function JobDetailContent() {
                     <div className="space-y-2">
                       <div className="text-sm text-muted-foreground">Client Cost (What THEY Pay)</div>
                       <div className="text-2xl font-bold text-green-600">
-                        ${jobDetail.calls.reduce((sum, call) => sum + call.client_cost_usd, 0).toFixed(6)}
+                        ${jobDetail.calls.reduce((sum, call) => sum + (call.client_cost_usd ?? call.cost_usd ?? 0), 0).toFixed(6)}
                       </div>
                       <div className="text-xs text-muted-foreground">
                         What you charge your client (with markup)
@@ -257,14 +257,14 @@ function JobDetailContent() {
                     <div className="space-y-2">
                       <div className="text-sm text-muted-foreground">Your Profit</div>
                       <div className="text-2xl font-bold text-blue-600">
-                        ${(jobDetail.calls.reduce((sum, call) => sum + call.client_cost_usd, 0) -
-                            jobDetail.calls.reduce((sum, call) => sum + call.provider_cost_usd, 0)).toFixed(6)}
+                        ${(jobDetail.calls.reduce((sum, call) => sum + (call.client_cost_usd ?? call.cost_usd ?? 0), 0) -
+                            jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0)).toFixed(6)}
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        {jobDetail.calls.reduce((sum, call) => sum + call.provider_cost_usd, 0) > 0
-                          ? `${(((jobDetail.calls.reduce((sum, call) => sum + call.client_cost_usd, 0) -
-                                jobDetail.calls.reduce((sum, call) => sum + call.provider_cost_usd, 0)) /
-                                jobDetail.calls.reduce((sum, call) => sum + call.provider_cost_usd, 0)) * 100).toFixed(1)}% profit margin`
+                        {jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0) > 0
+                          ? `${(((jobDetail.calls.reduce((sum, call) => sum + (call.client_cost_usd ?? call.cost_usd ?? 0), 0) -
+                                jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0)) /
+                                jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0)) * 100).toFixed(1)}% profit margin`
                           : 'N/A'}
                       </div>
                     </div>
@@ -340,7 +340,7 @@ function JobDetailContent() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="text-sm font-medium text-red-600">
-                                    ${call.provider_cost_usd.toFixed(6)}
+                                    ${(call.provider_cost_usd ?? call.cost_usd ?? 0).toFixed(6)}
                                   </div>
                                   {call.model_pricing_input !== null && call.model_pricing_output !== null && (
                                     <div className="text-xs text-muted-foreground">
@@ -350,16 +350,16 @@ function JobDetailContent() {
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="text-sm font-medium text-green-600">
-                                    ${call.client_cost_usd.toFixed(6)}
+                                    ${(call.client_cost_usd ?? call.cost_usd ?? 0).toFixed(6)}
                                   </div>
                                 </TableCell>
                                 <TableCell className="text-right">
                                   <div className="text-sm font-medium text-blue-600">
-                                    ${(call.client_cost_usd - call.provider_cost_usd).toFixed(6)}
+                                    ${((call.client_cost_usd ?? call.cost_usd ?? 0) - (call.provider_cost_usd ?? call.cost_usd ?? 0)).toFixed(6)}
                                   </div>
-                                  {call.provider_cost_usd > 0 && (
+                                  {(call.provider_cost_usd ?? call.cost_usd ?? 0) > 0 && (
                                     <div className="text-xs text-muted-foreground">
-                                      {(((call.client_cost_usd - call.provider_cost_usd) / call.provider_cost_usd) * 100).toFixed(1)}% markup
+                                      {((((call.client_cost_usd ?? call.cost_usd ?? 0) - (call.provider_cost_usd ?? call.cost_usd ?? 0)) / (call.provider_cost_usd ?? call.cost_usd ?? 1)) * 100).toFixed(1)}% markup
                                     </div>
                                   )}
                                 </TableCell>
