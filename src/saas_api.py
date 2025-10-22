@@ -286,7 +286,7 @@ async def health_check():
     return {"status": "healthy", "service": "saas-llm-api"}
 
 
-@app.post("/api/jobs/create", response_model=JobCreateResponse)
+@app.post("/api/jobs/create", response_model=JobCreateResponse, tags=["jobs"])
 async def create_job(
     request: JobCreateRequest,
     db: Session = Depends(get_db),
@@ -324,7 +324,7 @@ async def create_job(
     )
 
 
-@app.post("/api/jobs/{job_id}/llm-call", response_model=LLMCallResponse)
+@app.post("/api/jobs/{job_id}/llm-call", response_model=LLMCallResponse, tags=["jobs"])
 async def make_llm_call(
     job_id: str,
     request: LLMCallRequest,
@@ -509,7 +509,7 @@ async def make_llm_call(
         raise HTTPException(status_code=500, detail=f"LLM call failed: {str(e)}")
 
 
-@app.post("/api/jobs/{job_id}/llm-call-stream")
+@app.post("/api/jobs/{job_id}/llm-call-stream", tags=["jobs"])
 async def make_llm_call_stream(
     job_id: str,
     request: LLMCallRequest,
@@ -732,7 +732,7 @@ async def make_llm_call_stream(
     )
 
 
-@app.post("/api/jobs/create-and-call", response_model=SingleCallJobResponse)
+@app.post("/api/jobs/create-and-call", response_model=SingleCallJobResponse, tags=["jobs"])
 async def create_and_call_job(
     request: SingleCallJobRequest,
     db: Session = Depends(get_db),
@@ -988,7 +988,7 @@ async def create_and_call_job(
     )
 
 
-@app.post("/api/jobs/create-and-call-stream")
+@app.post("/api/jobs/create-and-call-stream", tags=["jobs"])
 async def create_and_call_job_stream(
     request: SingleCallJobRequest,
     db: Session = Depends(get_db),
@@ -1293,7 +1293,7 @@ async def create_and_call_job_stream(
     )
 
 
-@app.post("/api/jobs/{job_id}/complete", response_model=JobCompleteResponse)
+@app.post("/api/jobs/{job_id}/complete", response_model=JobCompleteResponse, tags=["jobs"])
 async def complete_job(
     job_id: str,
     request: JobCompleteRequest,
@@ -1439,7 +1439,7 @@ async def complete_job(
     )
 
 
-@app.get("/api/jobs/{job_id}")
+@app.get("/api/jobs/{job_id}", tags=["jobs"])
 async def get_job(
     job_id: str,
     db: Session = Depends(get_db),
@@ -1464,7 +1464,7 @@ async def get_job(
     return job.to_dict()
 
 
-@app.patch("/api/jobs/{job_id}/metadata")
+@app.patch("/api/jobs/{job_id}/metadata", tags=["jobs"])
 async def update_job_metadata(
     job_id: str,
     request: JobMetadataUpdateRequest,
@@ -1516,7 +1516,7 @@ async def update_job_metadata(
     }
 
 
-@app.get("/api/jobs/{job_id}/costs")
+@app.get("/api/jobs/{job_id}/costs", tags=["jobs"])
 async def get_job_costs(
     job_id: str,
     db: Session = Depends(get_db),
@@ -1568,7 +1568,7 @@ async def get_job_costs(
     }
 
 
-@app.get("/api/teams/{team_id}/usage")
+@app.get("/api/teams/{team_id}/usage", tags=["teams"])
 async def get_team_usage(
     team_id: str,
     period: str,  # e.g., "2024-10" or "2024-10-08"
@@ -1640,7 +1640,7 @@ async def get_team_usage(
     return summary.to_dict()
 
 
-@app.get("/api/teams/{team_id}/jobs")
+@app.get("/api/teams/{team_id}/jobs", tags=["jobs"])
 async def list_team_jobs(
     team_id: str,
     limit: int = 100,
