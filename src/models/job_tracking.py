@@ -112,7 +112,15 @@ class LLMCall(Base):
     total_tokens = Column(Integer, default=0)
 
     # Cost tracking (in USD)
-    cost_usd = Column(Numeric(10, 6), default=0.0)
+    cost_usd = Column(Numeric(10, 6), default=0.0)  # Legacy field
+    input_cost_usd = Column(Numeric(10, 8), nullable=True)  # Cost for input tokens
+    output_cost_usd = Column(Numeric(10, 8), nullable=True)  # Cost for output tokens
+    provider_cost_usd = Column(Numeric(10, 8), nullable=True)  # What LiteLLM charged us
+    client_cost_usd = Column(Numeric(10, 8), nullable=True)  # What we charge client (with markup)
+
+    # Model pricing at time of call (per 1M tokens)
+    model_pricing_input = Column(Numeric(10, 6), nullable=True)  # Input price per 1M tokens for resolved model
+    model_pricing_output = Column(Numeric(10, 6), nullable=True)  # Output price per 1M tokens for resolved model
 
     # Performance metrics
     latency_ms = Column(Integer, nullable=True)
@@ -145,6 +153,12 @@ class LLMCall(Base):
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
             "cost_usd": float(self.cost_usd) if self.cost_usd else 0.0,
+            "input_cost_usd": float(self.input_cost_usd) if self.input_cost_usd else 0.0,
+            "output_cost_usd": float(self.output_cost_usd) if self.output_cost_usd else 0.0,
+            "provider_cost_usd": float(self.provider_cost_usd) if self.provider_cost_usd else 0.0,
+            "client_cost_usd": float(self.client_cost_usd) if self.client_cost_usd else 0.0,
+            "model_pricing_input": float(self.model_pricing_input) if self.model_pricing_input else None,
+            "model_pricing_output": float(self.model_pricing_output) if self.model_pricing_output else None,
             "latency_ms": self.latency_ms,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "purpose": self.purpose,

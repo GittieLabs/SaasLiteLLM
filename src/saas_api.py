@@ -23,6 +23,11 @@ from .api.constants import (
     DEFAULT_CREDITS_PER_DOLLAR,
     MINIMUM_CREDITS_PER_JOB
 )
+from .utils.cost_calculator import (
+    calculate_token_costs,
+    apply_markup,
+    get_model_pricing
+)
 
 # Import new API routers
 from .api import organizations, model_groups, teams, credits, dashboard, models, model_access_groups, admin_users, jobs
@@ -248,6 +253,51 @@ async def call_litellm(
             return response.json()
 
 
+def calculate_complete_costs(
+    resolved_model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    markup_percentage: float
+) -> Dict[str, Any]:
+    """
+    Calculate complete cost breakdown with pricing and markup.
+
+    Returns dict with:
+    - model_pricing_input: Input price per 1M tokens
+    - model_pricing_output: Output price per 1M tokens
+    - input_cost_usd: Cost for input tokens
+    - output_cost_usd: Cost for output tokens
+    - provider_cost_usd: Total provider cost
+    - client_cost_usd: Provider cost with markup applied
+    """
+    # Get pricing for the resolved model (not the alias!)
+    pricing = get_model_pricing(resolved_model)
+
+    # Calculate token costs
+    costs = calculate_token_costs(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        input_price_per_million=pricing["input"],
+        output_price_per_million=pricing["output"]
+    )
+
+    # Apply markup
+    markup_costs = apply_markup(
+        provider_cost_usd=costs["provider_cost_usd"],
+        markup_percentage=markup_percentage
+    )
+
+    # Return complete breakdown
+    return {
+        "model_pricing_input": pricing["input"],
+        "model_pricing_output": pricing["output"],
+        "input_cost_usd": costs["input_cost_usd"],
+        "output_cost_usd": costs["output_cost_usd"],
+        "provider_cost_usd": markup_costs["provider_cost_usd"],
+        "client_cost_usd": markup_costs["client_cost_usd"]
+    }
+
+
 def calculate_job_costs(db: Session, job_id: uuid.UUID) -> Dict[str, Any]:
     """Calculate aggregated costs for a job"""
     calls = db.query(LLMCall).filter(LLMCall.job_id == job_id).all()
@@ -266,7 +316,8 @@ def calculate_job_costs(db: Session, job_id: uuid.UUID) -> Dict[str, Any]:
     successful_calls = len([c for c in calls if not c.error])
     failed_calls = total_calls - successful_calls
     total_tokens = sum(c.total_tokens for c in calls)
-    total_cost_usd = sum(float(c.cost_usd) for c in calls)
+    # Use client_cost_usd (with markup) instead of legacy cost_usd
+    total_cost_usd = sum(float(c.client_cost_usd) if c.client_cost_usd else 0.0 for c in calls)
     avg_latency_ms = int(sum(c.latency_ms for c in calls if c.latency_ms) / len([c for c in calls if c.latency_ms])) if any(c.latency_ms for c in calls) else 0
 
     return {
@@ -421,43 +472,35 @@ async def make_llm_call(
         completion_tokens = usage.get("completion_tokens", 0)
         total_tokens = usage.get("total_tokens", 0)
 
-        # Extract actual cost from LiteLLM response
-        # LiteLLM calculates accurate costs based on model-specific pricing
-        cost_usd = 0.0
+        # Get resolved model from LiteLLM response (the ACTUAL model used, not the alias)
+        resolved_model = litellm_response.get("model", primary_model)
 
-        # Try multiple possible locations for cost in LiteLLM response
-        if "_hidden_params" in litellm_response:
-            cost_usd = litellm_response["_hidden_params"].get("response_cost", 0.0)
+        # Calculate complete costs with pricing and markup
+        markup_percentage = float(team_credits.cost_markup_percentage) if team_credits.cost_markup_percentage else 0.0
+        complete_costs = calculate_complete_costs(
+            resolved_model=resolved_model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            markup_percentage=markup_percentage
+        )
 
-        # Fallback to usage object if cost is there
-        if not cost_usd and "cost" in usage:
-            cost_usd = usage.get("cost", 0.0)
-
-        # Fallback: Query model pricing from database if LiteLLM didn't provide cost
-        if not cost_usd:
-            from ..models.model_aliases import ModelAlias
-            model_record = db.query(ModelAlias).filter(
-                ModelAlias.model_alias == primary_model
-            ).first()
-
-            if model_record and model_record.pricing_input and model_record.pricing_output:
-                # pricing_input and pricing_output are cost per 1M tokens
-                cost_usd = (
-                    (prompt_tokens * float(model_record.pricing_input) / 1_000_000) +
-                    (completion_tokens * float(model_record.pricing_output) / 1_000_000)
-                )
-
-        # Store LLM call record with model group tracking
+        # Store LLM call record with complete cost tracking
         llm_call = LLMCall(
             job_id=job.job_id,
             litellm_request_id=litellm_response.get("id"),
             model_used=primary_model,
             model_group_used=request.model,
-            resolved_model=litellm_response.get("model", primary_model),
+            resolved_model=resolved_model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
-            cost_usd=cost_usd,
+            cost_usd=complete_costs["provider_cost_usd"],  # Legacy field
+            input_cost_usd=complete_costs["input_cost_usd"],
+            output_cost_usd=complete_costs["output_cost_usd"],
+            provider_cost_usd=complete_costs["provider_cost_usd"],
+            client_cost_usd=complete_costs["client_cost_usd"],
+            model_pricing_input=complete_costs["model_pricing_input"],
+            model_pricing_output=complete_costs["model_pricing_output"],
             latency_ms=latency_ms,
             purpose=request.purpose,
             request_data={"messages": request.messages, "model": request.model},
