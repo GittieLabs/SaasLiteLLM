@@ -23,6 +23,11 @@ from .api.constants import (
     DEFAULT_CREDITS_PER_DOLLAR,
     MINIMUM_CREDITS_PER_JOB
 )
+from .utils.cost_calculator import (
+    calculate_token_costs,
+    apply_markup,
+    get_model_pricing
+)
 
 # Import new API routers
 from .api import organizations, model_groups, teams, credits, dashboard, models, model_access_groups, admin_users, jobs, provider_credentials
@@ -117,6 +122,8 @@ class LLMCallRequest(BaseModel):
     frequency_penalty: Optional[float] = None
     presence_penalty: Optional[float] = None
     stop: Optional[List[str]] = None
+    # Call-specific metadata to append to job metadata
+    call_metadata: Optional[Dict[str, Any]] = None
 
 
 class LLMCallResponse(BaseModel):
@@ -129,6 +136,11 @@ class JobCompleteRequest(BaseModel):
     status: Literal["completed", "failed"]  # Only these two values are valid
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict)
     error_message: Optional[str] = None
+
+
+class JobMetadataUpdateRequest(BaseModel):
+    """Request model for appending metadata to a job"""
+    metadata: Dict[str, Any]
 
 
 class JobCompleteResponse(BaseModel):
@@ -242,6 +254,51 @@ async def call_litellm(
             return response.json()
 
 
+def calculate_complete_costs(
+    resolved_model: str,
+    prompt_tokens: int,
+    completion_tokens: int,
+    markup_percentage: float
+) -> Dict[str, Any]:
+    """
+    Calculate complete cost breakdown with pricing and markup.
+
+    Returns dict with:
+    - model_pricing_input: Input price per 1M tokens
+    - model_pricing_output: Output price per 1M tokens
+    - input_cost_usd: Cost for input tokens
+    - output_cost_usd: Cost for output tokens
+    - provider_cost_usd: Total provider cost
+    - client_cost_usd: Provider cost with markup applied
+    """
+    # Get pricing for the resolved model (not the alias!)
+    pricing = get_model_pricing(resolved_model)
+
+    # Calculate token costs
+    costs = calculate_token_costs(
+        prompt_tokens=prompt_tokens,
+        completion_tokens=completion_tokens,
+        input_price_per_million=pricing["input"],
+        output_price_per_million=pricing["output"]
+    )
+
+    # Apply markup
+    markup_costs = apply_markup(
+        provider_cost_usd=costs["provider_cost_usd"],
+        markup_percentage=markup_percentage
+    )
+
+    # Return complete breakdown
+    return {
+        "model_pricing_input": pricing["input"],
+        "model_pricing_output": pricing["output"],
+        "input_cost_usd": costs["input_cost_usd"],
+        "output_cost_usd": costs["output_cost_usd"],
+        "provider_cost_usd": markup_costs["provider_cost_usd"],
+        "client_cost_usd": markup_costs["client_cost_usd"]
+    }
+
+
 def calculate_job_costs(db: Session, job_id: uuid.UUID) -> Dict[str, Any]:
     """Calculate aggregated costs for a job"""
     calls = db.query(LLMCall).filter(LLMCall.job_id == job_id).all()
@@ -260,7 +317,8 @@ def calculate_job_costs(db: Session, job_id: uuid.UUID) -> Dict[str, Any]:
     successful_calls = len([c for c in calls if not c.error])
     failed_calls = total_calls - successful_calls
     total_tokens = sum(c.total_tokens for c in calls)
-    total_cost_usd = sum(float(c.cost_usd) for c in calls)
+    # Use client_cost_usd (with markup) instead of legacy cost_usd
+    total_cost_usd = sum(float(c.client_cost_usd) if c.client_cost_usd else 0.0 for c in calls)
     avg_latency_ms = int(sum(c.latency_ms for c in calls if c.latency_ms) / len([c for c in calls if c.latency_ms])) if any(c.latency_ms for c in calls) else 0
 
     return {
@@ -280,7 +338,7 @@ async def health_check():
     return {"status": "healthy", "service": "saas-llm-api"}
 
 
-@app.post("/api/jobs/create", response_model=JobCreateResponse)
+@app.post("/api/jobs/create", response_model=JobCreateResponse, tags=["jobs"])
 async def create_job(
     request: JobCreateRequest,
     db: Session = Depends(get_db),
@@ -318,7 +376,7 @@ async def create_job(
     )
 
 
-@app.post("/api/jobs/{job_id}/llm-call", response_model=LLMCallResponse)
+@app.post("/api/jobs/{job_id}/llm-call", response_model=LLMCallResponse, tags=["jobs"])
 async def make_llm_call(
     job_id: str,
     request: LLMCallRequest,
@@ -415,43 +473,35 @@ async def make_llm_call(
         completion_tokens = usage.get("completion_tokens", 0)
         total_tokens = usage.get("total_tokens", 0)
 
-        # Extract actual cost from LiteLLM response
-        # LiteLLM calculates accurate costs based on model-specific pricing
-        cost_usd = 0.0
+        # Get resolved model from LiteLLM response (the ACTUAL model used, not the alias)
+        resolved_model = litellm_response.get("model", primary_model)
 
-        # Try multiple possible locations for cost in LiteLLM response
-        if "_hidden_params" in litellm_response:
-            cost_usd = litellm_response["_hidden_params"].get("response_cost", 0.0)
+        # Calculate complete costs with pricing and markup
+        markup_percentage = float(team_credits.cost_markup_percentage) if team_credits.cost_markup_percentage else 0.0
+        complete_costs = calculate_complete_costs(
+            resolved_model=resolved_model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            markup_percentage=markup_percentage
+        )
 
-        # Fallback to usage object if cost is there
-        if not cost_usd and "cost" in usage:
-            cost_usd = usage.get("cost", 0.0)
-
-        # Fallback: Query model pricing from database if LiteLLM didn't provide cost
-        if not cost_usd:
-            from ..models.model_aliases import ModelAlias
-            model_record = db.query(ModelAlias).filter(
-                ModelAlias.model_alias == primary_model
-            ).first()
-
-            if model_record and model_record.pricing_input and model_record.pricing_output:
-                # pricing_input and pricing_output are cost per 1M tokens
-                cost_usd = (
-                    (prompt_tokens * float(model_record.pricing_input) / 1_000_000) +
-                    (completion_tokens * float(model_record.pricing_output) / 1_000_000)
-                )
-
-        # Store LLM call record with model group tracking
+        # Store LLM call record with complete cost tracking
         llm_call = LLMCall(
             job_id=job.job_id,
             litellm_request_id=litellm_response.get("id"),
             model_used=primary_model,
             model_group_used=request.model,
-            resolved_model=litellm_response.get("model", primary_model),
+            resolved_model=resolved_model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
             total_tokens=total_tokens,
-            cost_usd=cost_usd,
+            cost_usd=complete_costs["provider_cost_usd"],  # Legacy field
+            input_cost_usd=complete_costs["input_cost_usd"],
+            output_cost_usd=complete_costs["output_cost_usd"],
+            provider_cost_usd=complete_costs["provider_cost_usd"],
+            client_cost_usd=complete_costs["client_cost_usd"],
+            model_pricing_input=complete_costs["model_pricing_input"],
+            model_pricing_output=complete_costs["model_pricing_output"],
             latency_ms=latency_ms,
             purpose=request.purpose,
             request_data={"messages": request.messages, "model": request.model},
@@ -461,6 +511,18 @@ async def make_llm_call(
         db.add(llm_call)
         db.commit()
         db.refresh(llm_call)
+
+        # Append call-specific metadata to job metadata if provided
+        if request.call_metadata:
+            if job.job_metadata is None:
+                job.job_metadata = {}
+
+            job.job_metadata.update(request.call_metadata)
+
+            # Mark the attribute as modified for SQLAlchemy to detect the change
+            from sqlalchemy.orm.attributes import flag_modified
+            flag_modified(job, 'job_metadata')
+            db.commit()
 
         # Return response (without exposing model or cost to client)
         return LLMCallResponse(
@@ -491,7 +553,7 @@ async def make_llm_call(
         raise HTTPException(status_code=500, detail=f"LLM call failed: {str(e)}")
 
 
-@app.post("/api/jobs/{job_id}/llm-call-stream")
+@app.post("/api/jobs/{job_id}/llm-call-stream", tags=["jobs"])
 async def make_llm_call_stream(
     job_id: str,
     request: LLMCallRequest,
@@ -562,8 +624,9 @@ async def make_llm_call_stream(
         job.model_groups_used.append(request.model)
         db.commit()
 
-    # Capture virtual_key before generator to avoid DetachedInstanceError
+    # Capture virtual_key and team_id before generator to avoid DetachedInstanceError
     virtual_key_value = team_credits.virtual_key
+    team_id_value = job.team_id
 
     # Create streaming generator
     async def stream_llm_response():
@@ -579,7 +642,7 @@ async def make_llm_call_stream(
             "messages": request.messages,
             "temperature": request.temperature,
             "stream": True,  # Enable streaming
-            "user": job.team_id,
+            "user": team_id_value,
         }
 
         # Add optional parameters
@@ -713,7 +776,7 @@ async def make_llm_call_stream(
     )
 
 
-@app.post("/api/jobs/create-and-call", response_model=SingleCallJobResponse)
+@app.post("/api/jobs/create-and-call", response_model=SingleCallJobResponse, tags=["jobs"])
 async def create_and_call_job(
     request: SingleCallJobRequest,
     db: Session = Depends(get_db),
@@ -969,7 +1032,315 @@ async def create_and_call_job(
     )
 
 
-@app.post("/api/jobs/{job_id}/complete", response_model=JobCompleteResponse)
+@app.post("/api/jobs/create-and-call-stream", tags=["jobs"])
+async def create_and_call_job_stream(
+    request: SingleCallJobRequest,
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
+):
+    """
+    Single-call streaming job endpoint: Creates job, streams LLM call, and completes job.
+
+    Perfect for chat applications that need real-time token streaming.
+
+    This endpoint:
+    1. Creates a job
+    2. Streams the LLM response via Server-Sent Events (SSE)
+    3. Automatically completes the job and deducts credits after streaming finishes
+
+    Returns: Server-Sent Events stream with LLM response chunks
+
+    Requires: Authorization header with virtual API key
+    """
+    from fastapi.responses import StreamingResponse
+    from .models.credits import TeamCredits
+    from .services.model_resolver import ModelResolver, ModelResolutionError
+    from .services.credit_manager import get_credit_manager, InsufficientCreditsError
+
+    # Verify that the authenticated team matches the request
+    if request.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail=f"API key does not belong to team '{request.team_id}'"
+        )
+
+    # Get team credits and virtual key
+    team_credits = db.query(TeamCredits).filter(
+        TeamCredits.team_id == request.team_id
+    ).first()
+
+    if not team_credits:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Team '{request.team_id}' not found"
+        )
+
+    if not team_credits.virtual_key:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Team '{request.team_id}' has no virtual key configured"
+        )
+
+    # Step 1: Create job
+    job = Job(
+        team_id=request.team_id,
+        user_id=request.user_id,
+        job_type=request.job_type,
+        status=JobStatus.IN_PROGRESS,
+        job_metadata=request.job_metadata,
+        started_at=datetime.utcnow()
+    )
+
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # Capture values before generator to avoid DetachedInstanceError
+    job_id_value = job.job_id
+    team_id_value = job.team_id
+    virtual_key_value = team_credits.virtual_key
+    budget_mode = team_credits.budget_mode
+    credits_per_dollar = team_credits.credits_per_dollar
+    tokens_per_credit = team_credits.tokens_per_credit
+
+    # Step 2: Resolve model
+    model_resolver = ModelResolver(db)
+
+    try:
+        primary_model, fallback_models = model_resolver.resolve_model_group(
+            team_id=job.team_id,
+            model_group_name=request.model
+        )
+    except ModelResolutionError as e:
+        # Mark job as failed before raising
+        job.status = JobStatus.FAILED
+        job.completed_at = datetime.utcnow()
+        job.error_message = str(e)
+        db.commit()
+        raise HTTPException(status_code=403, detail=str(e))
+
+    # Track model group usage
+    job.model_groups_used = [request.model]
+    db.commit()
+
+    # Create streaming generator
+    async def stream_and_complete():
+        # Send immediate keepalive to establish connection
+        yield ": keepalive\n\n"
+
+        litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
+
+        headers = {
+            "Authorization": f"Bearer {virtual_key_value}",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": primary_model,
+            "messages": request.messages,
+            "temperature": request.temperature,
+            "stream": True,
+            "user": team_id_value,
+        }
+
+        # Add optional parameters
+        if request.max_tokens:
+            payload["max_tokens"] = request.max_tokens
+        if request.response_format:
+            payload["response_format"] = request.response_format
+        if request.tools:
+            payload["tools"] = request.tools
+        if request.tool_choice:
+            payload["tool_choice"] = request.tool_choice
+        if request.top_p:
+            payload["top_p"] = request.top_p
+        if request.frequency_penalty:
+            payload["frequency_penalty"] = request.frequency_penalty
+        if request.presence_penalty:
+            payload["presence_penalty"] = request.presence_penalty
+        if request.stop:
+            payload["stop"] = request.stop
+
+        # Track accumulated response for database storage
+        accumulated_content = ""
+        accumulated_tokens = {"prompt": 0, "completion": 0, "total": 0}
+        litellm_request_id = None
+        start_time = datetime.utcnow()
+        llm_call_successful = False
+
+        try:
+            async with httpx.AsyncClient() as client:
+                async with client.stream('POST', litellm_url, json=payload, headers=headers, timeout=120.0) as response:
+                    response.raise_for_status()
+
+                    # Stream chunks to client
+                    async for line in response.aiter_lines():
+                        if line.startswith("data: "):
+                            chunk_data = line[6:]  # Remove "data: " prefix
+
+                            if chunk_data == "[DONE]":
+                                yield f"data: [DONE]\n\n"
+                                break
+
+                            try:
+                                import json
+                                chunk_json = json.loads(chunk_data)
+
+                                # Extract request ID from first chunk
+                                if litellm_request_id is None:
+                                    litellm_request_id = chunk_json.get("id")
+
+                                # Accumulate content
+                                if "choices" in chunk_json:
+                                    for choice in chunk_json["choices"]:
+                                        if "delta" in choice and "content" in choice["delta"]:
+                                            accumulated_content += choice["delta"]["content"]
+
+                                # Extract usage if present (usually in last chunk)
+                                if "usage" in chunk_json:
+                                    accumulated_tokens = {
+                                        "prompt": chunk_json["usage"].get("prompt_tokens", 0),
+                                        "completion": chunk_json["usage"].get("completion_tokens", 0),
+                                        "total": chunk_json["usage"].get("total_tokens", 0)
+                                    }
+
+                                # Stream to client immediately
+                                yield f"data: {chunk_data}\n\n"
+
+                            except json.JSONDecodeError:
+                                continue
+
+            # After streaming completes, store in database
+            end_time = datetime.utcnow()
+            latency_ms = int((end_time - start_time).total_seconds() * 1000)
+
+            # Calculate cost (fallback to model pricing if not provided)
+            cost_usd = 0.0
+            from .models.model_aliases import ModelAlias
+            model_record = db.query(ModelAlias).filter(
+                ModelAlias.model_alias == primary_model
+            ).first()
+
+            if model_record and model_record.pricing_input and model_record.pricing_output:
+                cost_usd = (
+                    (accumulated_tokens["prompt"] * float(model_record.pricing_input) / 1_000_000) +
+                    (accumulated_tokens["completion"] * float(model_record.pricing_output) / 1_000_000)
+                )
+
+            # Store LLM call record
+            llm_call = LLMCall(
+                job_id=job_id_value,
+                litellm_request_id=litellm_request_id,
+                model_used=primary_model,
+                model_group_used=request.model,
+                resolved_model=primary_model,
+                prompt_tokens=accumulated_tokens["prompt"],
+                completion_tokens=accumulated_tokens["completion"],
+                total_tokens=accumulated_tokens["total"],
+                cost_usd=cost_usd,
+                latency_ms=latency_ms,
+                purpose=request.purpose,
+                request_data={"messages": request.messages, "model": request.model},
+                response_data={"content": accumulated_content, "streaming": True}
+            )
+
+            db.add(llm_call)
+            db.commit()
+            llm_call_successful = True
+
+            # Step 3: Complete job and deduct credits
+            job_to_complete = db.query(Job).filter(Job.job_id == job_id_value).first()
+            if job_to_complete:
+                job_to_complete.status = JobStatus.COMPLETED
+                job_to_complete.completed_at = datetime.utcnow()
+
+                # Calculate costs
+                costs = calculate_job_costs(db, job_id_value)
+
+                # Credit deduction based on budget mode
+                credit_manager = get_credit_manager(db)
+                team_credits_refresh = db.query(TeamCredits).filter(
+                    TeamCredits.team_id == team_id_value
+                ).first()
+
+                if llm_call_successful and not job_to_complete.credit_applied and team_credits_refresh:
+                    try:
+                        # Calculate credits to deduct based on budget mode
+                        credits_to_deduct = MINIMUM_CREDITS_PER_JOB
+
+                        if budget_mode == "consumption_usd":
+                            credits_per_dollar_val = float(credits_per_dollar) if credits_per_dollar else DEFAULT_CREDITS_PER_DOLLAR
+                            credits_to_deduct = int(costs["total_cost_usd"] * credits_per_dollar_val)
+                            credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, credits_to_deduct)
+                        elif budget_mode == "consumption_tokens":
+                            tokens_per_credit_val = tokens_per_credit if tokens_per_credit else DEFAULT_TOKENS_PER_CREDIT
+                            credits_to_deduct = max(MINIMUM_CREDITS_PER_JOB, costs["total_tokens"] // tokens_per_credit_val)
+
+                        credit_manager.deduct_credit(
+                            team_id=team_id_value,
+                            job_id=job_id_value,
+                            credits_amount=credits_to_deduct,
+                            reason=f"Streaming single-call job {request.job_type} completed ({budget_mode} mode: {credits_to_deduct} credits)"
+                        )
+                        job_to_complete.credit_applied = True
+
+                    except InsufficientCreditsError as e:
+                        import logging
+                        logger = logging.getLogger(__name__)
+                        logger.warning(f"Job {job_id_value} completed but couldn't deduct credit: {str(e)}")
+
+                db.commit()
+
+                # Store cost summary
+                cost_summary = JobCostSummary(
+                    job_id=job_id_value,
+                    total_calls=costs["total_calls"],
+                    successful_calls=costs["successful_calls"],
+                    failed_calls=costs["failed_calls"],
+                    total_tokens=costs["total_tokens"],
+                    total_cost_usd=costs["total_cost_usd"],
+                    avg_latency_ms=costs["avg_latency_ms"],
+                    total_duration_seconds=int((job_to_complete.completed_at - job_to_complete.created_at).total_seconds())
+                )
+                db.merge(cost_summary)
+                db.commit()
+
+        except Exception as e:
+            # Record failed call
+            llm_call = LLMCall(
+                job_id=job_id_value,
+                model_group_used=request.model,
+                purpose=request.purpose,
+                error=str(e),
+                request_data={"messages": request.messages, "model": request.model}
+            )
+            db.add(llm_call)
+
+            # Mark job as failed
+            job_to_fail = db.query(Job).filter(Job.job_id == job_id_value).first()
+            if job_to_fail:
+                job_to_fail.status = JobStatus.FAILED
+                job_to_fail.completed_at = datetime.utcnow()
+                job_to_fail.error_message = str(e)
+
+            db.commit()
+
+            # Send error to client
+            import json
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(
+        stream_and_complete(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",  # Disable nginx buffering
+        }
+    )
+
+
+@app.post("/api/jobs/{job_id}/complete", response_model=JobCompleteResponse, tags=["jobs"])
 async def complete_job(
     job_id: str,
     request: JobCompleteRequest,
@@ -983,6 +1354,7 @@ async def complete_job(
     Requires: Authorization header with virtual API key
     """
     from .services.credit_manager import get_credit_manager, InsufficientCreditsError
+    from .models.credits import TeamCredits
 
     job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
     if not job:
@@ -995,8 +1367,8 @@ async def complete_job(
             detail="Job does not belong to your team"
         )
 
-    # Update job status
-    job.status = JobStatus(request.status)
+    # Update job status (convert to uppercase for enum)
+    job.status = JobStatus(request.status.upper())
     job.completed_at = datetime.utcnow()
     if request.error_message:
         job.error_message = request.error_message
@@ -1098,11 +1470,8 @@ async def complete_job(
         for call in calls
     ]
 
-    # Get updated credit balance
-    from .models.credits import TeamCredits
-    team_credits = db.query(TeamCredits).filter(
-        TeamCredits.team_id == job.team_id
-    ).first()
+    # Get updated credit balance (refresh the existing team_credits object)
+    db.refresh(team_credits)
 
     # Add credit information to costs
     costs["credit_applied"] = job.credit_applied
@@ -1117,7 +1486,7 @@ async def complete_job(
     )
 
 
-@app.get("/api/jobs/{job_id}")
+@app.get("/api/jobs/{job_id}", tags=["jobs"])
 async def get_job(
     job_id: str,
     db: Session = Depends(get_db),
@@ -1142,7 +1511,59 @@ async def get_job(
     return job.to_dict()
 
 
-@app.get("/api/jobs/{job_id}/costs")
+@app.patch("/api/jobs/{job_id}/metadata", tags=["jobs"])
+async def update_job_metadata(
+    job_id: str,
+    request: JobMetadataUpdateRequest,
+    db: Session = Depends(get_db),
+    authenticated_team_id: str = Depends(verify_virtual_key)
+):
+    """
+    Append metadata to a job's existing metadata.
+
+    This endpoint allows teams to enrich job metadata during execution,
+    particularly useful for:
+    - Chat applications tracking conversation turns
+    - Multi-step agent workflows recording intermediate results
+    - Adding business context as the job progresses
+
+    The provided metadata will be merged with existing job metadata.
+
+    Requires: Authorization header with virtual API key
+    """
+    job = db.query(Job).filter(Job.job_id == uuid.UUID(job_id)).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    # Verify job belongs to authenticated team
+    if job.team_id != authenticated_team_id:
+        raise HTTPException(
+            status_code=403,
+            detail="Job does not belong to your team"
+        )
+
+    # Initialize job_metadata if None
+    if job.job_metadata is None:
+        job.job_metadata = {}
+
+    # Merge new metadata with existing metadata
+    job.job_metadata.update(request.metadata)
+
+    # Mark the attribute as modified for SQLAlchemy to detect the change
+    from sqlalchemy.orm.attributes import flag_modified
+    flag_modified(job, 'job_metadata')
+
+    db.commit()
+    db.refresh(job)
+
+    return {
+        "job_id": str(job.job_id),
+        "metadata": job.job_metadata,
+        "updated_at": datetime.utcnow().isoformat()
+    }
+
+
+@app.get("/api/jobs/{job_id}/costs", tags=["jobs"])
 async def get_job_costs(
     job_id: str,
     db: Session = Depends(get_db),
@@ -1194,7 +1615,7 @@ async def get_job_costs(
     }
 
 
-@app.get("/api/teams/{team_id}/usage")
+@app.get("/api/teams/{team_id}/usage", tags=["teams"])
 async def get_team_usage(
     team_id: str,
     period: str,  # e.g., "2024-10" or "2024-10-08"
@@ -1266,7 +1687,7 @@ async def get_team_usage(
     return summary.to_dict()
 
 
-@app.get("/api/teams/{team_id}/jobs")
+@app.get("/api/teams/{team_id}/jobs", tags=["jobs"])
 async def list_team_jobs(
     team_id: str,
     limit: int = 100,

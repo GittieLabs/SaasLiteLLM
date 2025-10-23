@@ -42,7 +42,10 @@ curl -X POST http://localhost:8003/api/teams/create \
     "team_id": "acme-prod",
     "team_alias": "ACME Production",
     "access_groups": ["gpt-models"],
-    "credits_allocated": 1000
+    "credits_allocated": 1000,
+    "budget_mode": "job_based",
+    "credits_per_dollar": 10.0,
+    "tokens_per_credit": 10000
   }'
 ```
 
@@ -56,12 +59,123 @@ curl -X POST http://localhost:8003/api/teams/create \
   "credits_allocated": 1000,
   "credits_remaining": 1000,
   "status": "active",
-  "access_groups": ["gpt-models"]
+  "access_groups": ["gpt-models"],
+  "budget_mode": "job_based",
+  "credits_per_dollar": 10.0,
+  "tokens_per_credit": 10000
 }
 ```
 
 !!! warning "Save the Virtual Key"
     The virtual key is only shown once during team creation. Make sure to copy it and share it securely with your client!
+
+## Budget Modes
+
+Teams support three flexible billing modes to match different use cases:
+
+### Job-Based Billing (Default)
+
+**Best for:** Predictable flat-rate billing
+
+```json
+{
+  "budget_mode": "job_based"
+}
+```
+
+- **1 credit = 1 completed job** (regardless of token usage)
+- Simple and predictable for clients
+- Perfect for fixed-price operations
+
+**Example:** Document analysis service where each document costs 1 credit
+
+### USD-Based Billing
+
+**Best for:** Cost-plus pricing tied to actual LLM costs
+
+```json
+{
+  "budget_mode": "consumption_usd",
+  "credits_per_dollar": 10.0
+}
+```
+
+- Credits deducted based on actual USD cost of LLM calls
+- Useful for chat applications with variable costs
+- Set your margin with `credits_per_dollar` (e.g., 10 = $0.10 per credit)
+
+**Example:** Chat app where a conversation costing $0.05 deducts 0.5 credits (at 10 credits per dollar)
+
+**Calculation:**
+```
+Credits deducted = actual_cost_usd × credits_per_dollar
+```
+
+### Token-Based Billing
+
+**Best for:** Usage-based pricing by token consumption
+
+```json
+{
+  "budget_mode": "consumption_tokens",
+  "tokens_per_credit": 10000
+}
+```
+
+- Credits deducted based on tokens consumed
+- Most granular billing option
+- Perfect for API resellers tracking token usage
+
+**Example:** API service where 10,000 tokens = 1 credit
+
+**Calculation:**
+```
+Credits deducted = total_tokens ÷ tokens_per_credit
+```
+
+### Choosing a Budget Mode
+
+| Mode | Use Case | Billing | Client Predictability |
+|------|----------|---------|----------------------|
+| **job_based** | Fixed operations | 1 credit per job | High |
+| **consumption_usd** | Variable LLM costs | Based on $ cost | Medium |
+| **consumption_tokens** | Token tracking | Based on tokens | Low (variable input/output) |
+
+### Setting Budget Mode
+
+Budget mode is configured during team creation and defines how credits are calculated for that team.
+
+**Example: Chat Application (USD-based)**
+```bash
+curl -X POST http://localhost:8003/api/teams/create \
+  -d '{
+    "team_id": "chat-app-prod",
+    "budget_mode": "consumption_usd",
+    "credits_per_dollar": 20.0,
+    "credits_allocated": 1000
+  }'
+```
+
+With this configuration:
+- 1000 credits = $50 worth of LLM usage
+- Each $0.10 LLM call deducts 2 credits
+- Client can estimate costs based on conversation volume
+
+**Example: Token Service (Token-based)**
+```bash
+curl -X POST http://localhost:8003/api/teams/create \
+  -d '{
+    "team_id": "token-service",
+    "budget_mode": "consumption_tokens",
+    "tokens_per_credit": 5000,
+    "credits_allocated": 2000
+  }'
+```
+
+With this configuration:
+- 2000 credits = 10M tokens available
+- Job using 15,000 tokens deducts 3 credits
+- Perfect for API resellers tracking exact token usage
 
 ## Team Properties
 
@@ -74,6 +188,9 @@ curl -X POST http://localhost:8003/api/teams/create \
 | `credits_allocated` | integer | Total credits allocated |
 | `credits_remaining` | integer | Credits still available |
 | `access_groups` | array | Model access groups (e.g., ["gpt-models"]) |
+| `budget_mode` | string | Billing mode: job_based, consumption_usd, consumption_tokens |
+| `credits_per_dollar` | float | Conversion rate for USD-based billing (default: 10.0) |
+| `tokens_per_credit` | integer | Tokens per credit for token-based billing (default: 10000) |
 | `status` | string | active, suspended, paused |
 | `created_at` | timestamp | When team was created |
 

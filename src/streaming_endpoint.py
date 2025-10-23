@@ -17,6 +17,11 @@ from .models.job_tracking import Job, LLMCall, JobStatus
 from .models.credits import TeamCredits
 from .services.model_resolver import ModelResolver, ModelResolutionError
 from .config.settings import settings
+from .utils.cost_calculator import (
+    calculate_token_costs,
+    apply_markup,
+    get_model_pricing
+)
 
 
 async def make_llm_call_stream(
@@ -180,20 +185,25 @@ async def make_llm_call_stream(
             end_time = datetime.utcnow()
             latency_ms = int((end_time - start_time).total_seconds() * 1000)
 
-            # Calculate cost (fallback to model pricing if not provided)
-            cost_usd = 0.0
-            from .models.model_aliases import ModelAlias
-            model_record = db.query(ModelAlias).filter(
-                ModelAlias.model_alias == primary_model
-            ).first()
+            # Get model pricing for the resolved model
+            pricing = get_model_pricing(primary_model)
 
-            if model_record and model_record.pricing_input and model_record.pricing_output:
-                cost_usd = (
-                    (accumulated_tokens["prompt"] * float(model_record.pricing_input) / 1_000_000) +
-                    (accumulated_tokens["completion"] * float(model_record.pricing_output) / 1_000_000)
-                )
+            # Calculate complete costs with token pricing
+            token_costs = calculate_token_costs(
+                prompt_tokens=accumulated_tokens["prompt"],
+                completion_tokens=accumulated_tokens["completion"],
+                input_price_per_million=pricing["input"],
+                output_price_per_million=pricing["output"]
+            )
 
-            # Store LLM call record
+            # Apply team markup
+            markup_percentage = float(team_credits.cost_markup_percentage) if team_credits.cost_markup_percentage else 0.0
+            markup_costs = apply_markup(
+                provider_cost_usd=token_costs["provider_cost_usd"],
+                markup_percentage=markup_percentage
+            )
+
+            # Store LLM call record with complete cost tracking
             llm_call = LLMCall(
                 job_id=job.job_id,
                 litellm_request_id=litellm_request_id,
@@ -203,7 +213,13 @@ async def make_llm_call_stream(
                 prompt_tokens=accumulated_tokens["prompt"],
                 completion_tokens=accumulated_tokens["completion"],
                 total_tokens=accumulated_tokens["total"],
-                cost_usd=cost_usd,
+                cost_usd=token_costs["provider_cost_usd"],  # Legacy field
+                input_cost_usd=token_costs["input_cost_usd"],
+                output_cost_usd=token_costs["output_cost_usd"],
+                provider_cost_usd=token_costs["provider_cost_usd"],
+                client_cost_usd=markup_costs["client_cost_usd"],
+                model_pricing_input=pricing["input"],
+                model_pricing_output=pricing["output"],
                 latency_ms=latency_ms,
                 purpose=request.purpose,
                 request_data={"messages": request.messages, "model_group": request.model_group},

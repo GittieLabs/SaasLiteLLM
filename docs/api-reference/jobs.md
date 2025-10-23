@@ -447,6 +447,227 @@ curl -X POST http://localhost:8003/api/jobs/{job_id}/complete \
 
 ---
 
+### Update Job Metadata
+
+Append metadata to a job during execution. Useful for enriching job context as work progresses.
+
+**Endpoint:** `PATCH /api/jobs/{job_id}/metadata`
+
+**Authentication:** Required (virtual key)
+
+**Path Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `job_id` | string (UUID) | The job identifier |
+
+**Request Body:**
+
+```json
+{
+  "metadata": {
+    "conversation_turn": 3,
+    "user_sentiment": "positive",
+    "tokens_so_far": 450
+  }
+}
+```
+
+**Request Fields:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `metadata` | object | Yes | Metadata to merge with existing job metadata |
+
+**Response (200 OK):**
+
+```json
+{
+  "job_id": "550e8400-e29b-41d4-a716-446655440000",
+  "metadata": {
+    "document_id": "doc_123",
+    "conversation_turn": 3,
+    "user_sentiment": "positive",
+    "tokens_so_far": 450
+  },
+  "updated_at": "2025-10-14T12:03:45.000Z"
+}
+```
+
+**Example Request:**
+
+=== "cURL"
+
+    ```bash
+    curl -X PATCH http://localhost:8003/api/jobs/550e8400-e29b-41d4-a716-446655440000/metadata \
+      -H "Authorization: Bearer sk-your-virtual-key" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "metadata": {
+          "conversation_turn": 3,
+          "user_sentiment": "positive"
+        }
+      }'
+    ```
+
+=== "Python"
+
+    ```python
+    response = requests.patch(
+        f"{API_URL}/jobs/{job_id}/metadata",
+        headers=headers,
+        json={
+            "metadata": {
+                "conversation_turn": 3,
+                "user_sentiment": "positive"
+            }
+        }
+    )
+
+    result = response.json()
+    print(f"Updated metadata: {result['metadata']}")
+    ```
+
+=== "JavaScript"
+
+    ```javascript
+    const response = await fetch(`${API_URL}/jobs/${jobId}/metadata`, {
+      method: 'PATCH',
+      headers: {
+        'Authorization': `Bearer ${VIRTUAL_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        metadata: {
+          conversation_turn: 3,
+          user_sentiment: 'positive'
+        }
+      })
+    });
+
+    const result = await response.json();
+    console.log(`Updated metadata:`, result.metadata);
+    ```
+
+**Use Cases:**
+
+1. **Chat Applications**
+   - Track conversation history
+   - Record turn numbers
+   - Store user sentiment or feedback
+
+2. **Multi-Step Workflows**
+   - Record intermediate results
+   - Track progress through pipeline
+   - Store decision points
+
+3. **Agent Workflows**
+   - Log tool calls and results
+   - Track reasoning steps
+   - Record agent state changes
+
+**Example: Chat Application Tracking**
+
+```python
+# Create job for chat session
+job_response = requests.post(
+    f"{API_URL}/jobs/create",
+    headers=headers,
+    json={
+        "team_id": "acme-corp",
+        "job_type": "chat_session",
+        "metadata": {
+            "session_id": "sess_123",
+            "user_id": "user_456"
+        }
+    }
+)
+job_id = job_response.json()["job_id"]
+
+# User turn 1
+llm_response_1 = requests.post(
+    f"{API_URL}/jobs/{job_id}/llm-call",
+    headers=headers,
+    json={
+        "model": "gpt-4",
+        "messages": messages_turn_1,
+        "call_metadata": {
+            "turn": 1,
+            "user_message": "How do I deploy to production?"
+        }
+    }
+)
+
+# Update job metadata after turn 1
+requests.patch(
+    f"{API_URL}/jobs/{job_id}/metadata",
+    headers=headers,
+    json={
+        "metadata": {
+            "turns_completed": 1,
+            "last_topic": "deployment"
+        }
+    }
+)
+
+# User turn 2
+llm_response_2 = requests.post(
+    f"{API_URL}/jobs/{job_id}/llm-call",
+    headers=headers,
+    json={
+        "model": "gpt-4",
+        "messages": messages_turn_2,
+        "call_metadata": {
+            "turn": 2,
+            "user_message": "What about environment variables?"
+        }
+    }
+)
+
+# Update metadata after turn 2
+requests.patch(
+    f"{API_URL}/jobs/{job_id}/metadata",
+    headers=headers,
+    json={
+        "metadata": {
+            "turns_completed": 2,
+            "last_topic": "environment_configuration"
+        }
+    }
+)
+
+# Complete the chat session
+requests.post(
+    f"{API_URL}/jobs/{job_id}/complete",
+    headers=headers,
+    json={
+        "status": "completed",
+        "metadata": {
+            "satisfaction_rating": 5,
+            "resolved": True
+        }
+    }
+)
+```
+
+**Error Responses:**
+
+| Status Code | Error | Description |
+|-------------|-------|-------------|
+| 401 | Unauthorized | Invalid or missing virtual key |
+| 403 | Forbidden | Job does not belong to your team |
+| 404 | Not Found | Job not found |
+| 422 | Validation Error | Invalid metadata format |
+
+**Notes:**
+
+- Metadata is merged with existing job metadata (not replaced)
+- Use dot notation or nested objects to organize metadata
+- Metadata persists through job lifecycle and is returned in job details
+- Maximum metadata size: 10KB per job
+
+---
+
 ### Single-Call Job (Create, Call, and Complete)
 
 Create a job, make a single LLM call, and complete the job in one request. This is a convenience endpoint for simple workflows that only need one LLM call.
@@ -691,6 +912,362 @@ except requests.exceptions.Timeout:
 | 403 | Forbidden | Virtual key does not belong to team, or model access denied |
 | 422 | Validation Error | Invalid request data |
 | 500 | Internal Server Error | LLM call failed (job marked as failed, no credit charged) |
+
+---
+
+### Single-Call Job with Streaming (Create, Call, and Complete)
+
+Create a job, stream LLM response in real-time via Server-Sent Events (SSE), and complete the job automatically. This is the recommended endpoint for chat applications and any scenario requiring real-time token streaming.
+
+**Endpoint:** `POST /api/jobs/create-and-call-stream`
+
+**Authentication:** Required (virtual key)
+
+**Performance Benefits:**
+- Real-time streaming responses (lowest time-to-first-token)
+- Single API call (automatic job lifecycle)
+- Server-Sent Events (SSE) protocol
+- Automatic credit deduction on completion
+
+**Request Body:**
+
+Same as `/api/jobs/create-and-call` - see above for full parameter list.
+
+```json
+{
+  "team_id": "acme-corp",
+  "job_type": "chat_response",
+  "model": "gpt-4",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Tell me a short story"
+    }
+  ],
+  "temperature": 0.7,
+  "max_tokens": 500
+}
+```
+
+**Response:**
+
+Server-Sent Events (SSE) stream with `Content-Type: text/event-stream`
+
+**SSE Event Format:**
+
+Each event follows the SSE format: `data: {JSON}\n\n`
+
+```
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{"role":"assistant","content":""},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{"content":"Once"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{"content":" upon"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-123","object":"chat.completion.chunk","created":1234567890,"model":"gpt-4","choices":[{"index":0,"delta":{"content":" a"},"finish_reason":null}]}
+
+data: [DONE]
+```
+
+**Stream Events:**
+
+| Event | Description |
+|-------|-------------|
+| Chunk with `delta.role` | First chunk, contains role ("assistant") |
+| Chunk with `delta.content` | Text content chunk to append to response |
+| Chunk with `finish_reason` | Final chunk, reason: "stop", "length", or "content_filter" |
+| `[DONE]` | Stream complete (job auto-completed, credits deducted) |
+
+**Example Request:**
+
+=== "cURL"
+
+    ```bash
+    curl -N -X POST http://localhost:8003/api/jobs/create-and-call-stream \
+      -H "Authorization: Bearer sk-your-virtual-key" \
+      -H "Content-Type: application/json" \
+      -d '{
+        "team_id": "acme-corp",
+        "job_type": "chat_response",
+        "model": "gpt-4",
+        "messages": [
+          {"role": "user", "content": "Tell me a short story"}
+        ],
+        "temperature": 0.7
+      }'
+    ```
+
+    Note: `-N` flag disables buffering for real-time streaming
+
+=== "Python (requests)"
+
+    ```python
+    import requests
+    import json
+
+    API_URL = "http://localhost:8003/api"
+    VIRTUAL_KEY = "sk-your-virtual-key"
+
+    headers = {
+        "Authorization": f"Bearer {VIRTUAL_KEY}",
+        "Content-Type": "application/json"
+    }
+
+    response = requests.post(
+        f"{API_URL}/jobs/create-and-call-stream",
+        headers=headers,
+        json={
+            "team_id": "acme-corp",
+            "job_type": "chat_response",
+            "model": "gpt-4",
+            "messages": [
+                {"role": "user", "content": "Tell me a short story"}
+            ],
+            "temperature": 0.7
+        },
+        stream=True  # Important: enable streaming
+    )
+
+    # Process Server-Sent Events
+    accumulated = ""
+    for line in response.iter_lines():
+        if line:
+            line = line.decode('utf-8')
+            if line.startswith('data: '):
+                data_str = line[6:]  # Remove 'data: ' prefix
+
+                if data_str == '[DONE]':
+                    print("\n\nStream complete!")
+                    break
+
+                try:
+                    chunk = json.loads(data_str)
+                    if chunk.get("choices"):
+                        delta = chunk["choices"][0].get("delta", {})
+                        content = delta.get("content", "")
+                        if content:
+                            accumulated += content
+                            print(content, end="", flush=True)
+                except json.JSONDecodeError:
+                    continue
+
+    print(f"\n\nFull response: {accumulated}")
+    ```
+
+=== "Python (httpx async)"
+
+    ```python
+    import httpx
+    import json
+    import asyncio
+
+    async def stream_chat():
+        API_URL = "http://localhost:8003/api"
+        VIRTUAL_KEY = "sk-your-virtual-key"
+
+        headers = {
+            "Authorization": f"Bearer {VIRTUAL_KEY}",
+            "Content-Type": "application/json"
+        }
+
+        async with httpx.AsyncClient() as client:
+            async with client.stream(
+                "POST",
+                f"{API_URL}/jobs/create-and-call-stream",
+                headers=headers,
+                json={
+                    "team_id": "acme-corp",
+                    "job_type": "chat",
+                    "model": "gpt-4",
+                    "messages": [
+                        {"role": "user", "content": "Tell me a short story"}
+                    ]
+                },
+                timeout=60.0
+            ) as response:
+                accumulated = ""
+                async for line in response.aiter_lines():
+                    if line.startswith('data: '):
+                        data_str = line[6:]
+
+                        if data_str == '[DONE]':
+                            print("\n\nStream complete!")
+                            break
+
+                        try:
+                            chunk = json.loads(data_str)
+                            if chunk.get("choices"):
+                                delta = chunk["choices"][0].get("delta", {})
+                                content = delta.get("content", "")
+                                if content:
+                                    accumulated += content
+                                    print(content, end="", flush=True)
+                        except json.JSONDecodeError:
+                            continue
+
+                return accumulated
+
+    # Run the async function
+    response = asyncio.run(stream_chat())
+    print(f"\n\nFinal response: {response}")
+    ```
+
+=== "JavaScript (fetch)"
+
+    ```javascript
+    const API_URL = "http://localhost:8003/api";
+    const VIRTUAL_KEY = "sk-your-virtual-key";
+
+    async function streamChat() {
+      const response = await fetch(`${API_URL}/jobs/create-and-call-stream`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${VIRTUAL_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          team_id: 'acme-corp',
+          job_type: 'chat_response',
+          model: 'gpt-4',
+          messages: [
+            {role: 'user', content: 'Tell me a short story'}
+          ],
+          temperature: 0.7
+        })
+      });
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let accumulated = '';
+
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value);
+        const lines = chunk.split('\n');
+
+        for (const line of lines) {
+          if (line.startsWith('data: ')) {
+            const data = line.slice(6);
+
+            if (data === '[DONE]') {
+              console.log('\n\nStream complete!');
+              return accumulated;
+            }
+
+            try {
+              const parsed = JSON.parse(data);
+              if (parsed.choices && parsed.choices[0].delta.content) {
+                const content = parsed.choices[0].delta.content;
+                accumulated += content;
+                process.stdout.write(content); // Real-time output
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+      }
+
+      return accumulated;
+    }
+
+    // Use the function
+    streamChat().then(response => {
+      console.log(`\n\nFull response: ${response}`);
+    });
+    ```
+
+**When to Use This Endpoint:**
+
+✅ **Best for:**
+- Chat applications (real-time user experience)
+- Any scenario requiring streaming responses
+- Single LLM call workflows
+- Lowest time-to-first-token latency
+
+❌ **Not ideal for:**
+- Complex workflows with multiple LLM calls
+- When you need non-streaming responses (use `/api/jobs/create-and-call`)
+- Scenarios where streaming is not supported by the client
+
+**Streaming vs Non-Streaming Comparison:**
+
+| Endpoint | Response Type | Time to First Token | Use Case |
+|----------|--------------|---------------------|----------|
+| `/create-and-call-stream` | SSE Stream | ~300ms | Chat apps, real-time UX |
+| `/create-and-call` | JSON | ~1500ms | Simple responses, batch processing |
+
+**Error Handling:**
+
+Errors are sent as SSE events:
+
+```
+data: {"error": "Model not found"}
+
+data: [DONE]
+```
+
+Example error handling in Python:
+
+```python
+for line in response.iter_lines():
+    if line:
+        line = line.decode('utf-8')
+        if line.startswith('data: '):
+            data_str = line[6:]
+
+            if data_str == '[DONE]':
+                break
+
+            try:
+                chunk = json.loads(data_str)
+
+                # Check for errors
+                if "error" in chunk:
+                    print(f"Error: {chunk['error']}")
+                    break
+
+                # Process normal chunk
+                if chunk.get("choices"):
+                    delta = chunk["choices"][0].get("delta", {})
+                    content = delta.get("content", "")
+                    if content:
+                        print(content, end="", flush=True)
+            except json.JSONDecodeError:
+                continue
+```
+
+**Automatic Job Completion:**
+
+When the stream completes:
+1. Job is automatically marked as "completed"
+2. Credits are deducted based on budget mode (see [Teams API](teams.md))
+3. LLM call is stored in database
+4. Cost summary is calculated
+
+**Error Responses:**
+
+| Status Code | Error | Description |
+|-------------|-------|-------------|
+| 401 | Unauthorized | Invalid or missing virtual key |
+| 403 | Forbidden | Virtual key does not belong to team, or model access denied |
+| 422 | Validation Error | Invalid request data |
+| 500 | Internal Server Error | LLM streaming failed (job marked as failed, no credit charged) |
+
+**SSE Client Requirements:**
+
+- Set `stream=True` in requests library (Python)
+- Use `response.body.getReader()` in JavaScript fetch
+- Handle line-by-line parsing (`\n\n` delimiters)
+- Parse JSON after removing `data: ` prefix
+
+**See Also:**
+
+- [Streaming Guide](../integration/streaming.md) - Detailed streaming documentation
+- [Non-Streaming Single-Call](#single-call-job-create-call-and-complete) - JSON response version
+- [Multi-Step Streaming](../integration/streaming.md) - For complex workflows
 
 ---
 

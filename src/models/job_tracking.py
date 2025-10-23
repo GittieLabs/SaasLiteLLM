@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 import uuid
 import enum
 from datetime import datetime
+from ..utils.datetime_helpers import to_utc_isoformat
 
 Base = declarative_base()
 
@@ -80,9 +81,9 @@ class Job(Base):
             "user_id": self.user_id,
             "job_type": self.job_type,
             "status": self.status.value,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "started_at": self.started_at.isoformat() if self.started_at else None,
-            "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "created_at": to_utc_isoformat(self.created_at),
+            "started_at": to_utc_isoformat(self.started_at),
+            "completed_at": to_utc_isoformat(self.completed_at),
             "metadata": self.job_metadata,
             "error_message": self.error_message,
             "organization_id": self.organization_id,
@@ -112,7 +113,15 @@ class LLMCall(Base):
     total_tokens = Column(Integer, default=0)
 
     # Cost tracking (in USD)
-    cost_usd = Column(Numeric(10, 6), default=0.0)
+    cost_usd = Column(Numeric(10, 6), default=0.0)  # Legacy field
+    input_cost_usd = Column(Numeric(10, 8), nullable=True)  # Cost for input tokens
+    output_cost_usd = Column(Numeric(10, 8), nullable=True)  # Cost for output tokens
+    provider_cost_usd = Column(Numeric(10, 8), nullable=True)  # What LiteLLM charged us
+    client_cost_usd = Column(Numeric(10, 8), nullable=True)  # What we charge client (with markup)
+
+    # Model pricing at time of call (per 1M tokens)
+    model_pricing_input = Column(Numeric(10, 6), nullable=True)  # Input price per 1M tokens for resolved model
+    model_pricing_output = Column(Numeric(10, 6), nullable=True)  # Output price per 1M tokens for resolved model
 
     # Performance metrics
     latency_ms = Column(Integer, nullable=True)
@@ -145,8 +154,14 @@ class LLMCall(Base):
             "completion_tokens": self.completion_tokens,
             "total_tokens": self.total_tokens,
             "cost_usd": float(self.cost_usd) if self.cost_usd else 0.0,
+            "input_cost_usd": float(self.input_cost_usd) if self.input_cost_usd else 0.0,
+            "output_cost_usd": float(self.output_cost_usd) if self.output_cost_usd else 0.0,
+            "provider_cost_usd": float(self.provider_cost_usd) if self.provider_cost_usd else 0.0,
+            "client_cost_usd": float(self.client_cost_usd) if self.client_cost_usd else 0.0,
+            "model_pricing_input": float(self.model_pricing_input) if self.model_pricing_input else None,
+            "model_pricing_output": float(self.model_pricing_output) if self.model_pricing_output else None,
             "latency_ms": self.latency_ms,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": to_utc_isoformat(self.created_at),
             "purpose": self.purpose,
             "error": self.error,
             "model_group_used": self.model_group_used,
@@ -195,7 +210,7 @@ class JobCostSummary(Base):
             "total_cost_usd": float(self.total_cost_usd) if self.total_cost_usd else 0.0,
             "avg_latency_ms": self.avg_latency_ms,
             "total_duration_seconds": self.total_duration_seconds,
-            "calculated_at": self.calculated_at.isoformat() if self.calculated_at else None
+            "calculated_at": to_utc_isoformat(self.calculated_at)
         }
 
 
@@ -244,7 +259,7 @@ class TeamUsageSummary(Base):
             "total_cost_usd": float(self.total_cost_usd) if self.total_cost_usd else 0.0,
             "total_tokens": self.total_tokens,
             "job_type_breakdown": self.job_type_breakdown,
-            "calculated_at": self.calculated_at.isoformat() if self.calculated_at else None
+            "calculated_at": to_utc_isoformat(self.calculated_at)
         }
 
 
@@ -273,6 +288,6 @@ class WebhookRegistration(Base):
             "webhook_url": self.webhook_url,
             "events": self.events,
             "is_active": bool(self.is_active),
-            "created_at": self.created_at.isoformat() if self.created_at else None,
-            "last_triggered_at": self.last_triggered_at.isoformat() if self.last_triggered_at else None
+            "created_at": to_utc_isoformat(self.created_at),
+            "last_triggered_at": to_utc_isoformat(self.last_triggered_at)
         }

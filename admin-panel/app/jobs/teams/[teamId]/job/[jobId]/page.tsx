@@ -20,6 +20,12 @@ interface LLMCallDetail {
   completion_tokens: number;
   total_tokens: number;
   cost_usd: number;
+  input_cost_usd: number;
+  output_cost_usd: number;
+  provider_cost_usd: number;
+  client_cost_usd: number;
+  model_pricing_input: number | null;
+  model_pricing_output: number | null;
   latency_ms: number | null;
   created_at: string;
   error: string | null;
@@ -219,6 +225,53 @@ function JobDetailContent() {
                 </CardContent>
               </Card>
 
+              {/* Cost Breakdown Card */}
+              <Card className="mb-6 border-2 border-blue-500/20">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    Cost Breakdown
+                    <Badge variant="outline" className="text-xs">Critical Business Metrics</Badge>
+                  </CardTitle>
+                  <CardDescription>Understanding your profit margins</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="space-y-2">
+                      <div className="text-sm text-muted-foreground">Provider Cost (What YOU Pay)</div>
+                      <div className="text-2xl font-bold text-red-600">
+                        ${jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0).toFixed(6)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        Your cost to LiteLLM/OpenAI/Anthropic
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm text-muted-foreground">Client Cost (What THEY Pay)</div>
+                      <div className="text-2xl font-bold text-green-600">
+                        ${jobDetail.calls.reduce((sum, call) => sum + (call.client_cost_usd ?? call.cost_usd ?? 0), 0).toFixed(6)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        What you charge your client (with markup)
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="text-sm text-muted-foreground">Your Profit</div>
+                      <div className="text-2xl font-bold text-blue-600">
+                        ${(jobDetail.calls.reduce((sum, call) => sum + (call.client_cost_usd ?? call.cost_usd ?? 0), 0) -
+                            jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0)).toFixed(6)}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0) > 0
+                          ? `${(((jobDetail.calls.reduce((sum, call) => sum + (call.client_cost_usd ?? call.cost_usd ?? 0), 0) -
+                                jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0)) /
+                                jobDetail.calls.reduce((sum, call) => sum + (call.provider_cost_usd ?? call.cost_usd ?? 0), 0)) * 100).toFixed(1)}% profit margin`
+                          : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
               {/* LLM Calls Card */}
               <Card>
                 <CardHeader>
@@ -241,10 +294,10 @@ function JobDetailContent() {
                             <TableHead>Model</TableHead>
                             <TableHead>Purpose</TableHead>
                             <TableHead>Time</TableHead>
-                            <TableHead className="text-right">Prompt</TableHead>
-                            <TableHead className="text-right">Completion</TableHead>
-                            <TableHead className="text-right">Total</TableHead>
-                            <TableHead className="text-right">Cost</TableHead>
+                            <TableHead className="text-right">Tokens</TableHead>
+                            <TableHead className="text-right">Provider Cost (YOU Pay)</TableHead>
+                            <TableHead className="text-right">Client Cost (THEY Pay)</TableHead>
+                            <TableHead className="text-right">Your Profit</TableHead>
                             <TableHead className="text-right">Latency</TableHead>
                             <TableHead>Status</TableHead>
                             <TableHead>Actions</TableHead>
@@ -278,16 +331,37 @@ function JobDetailContent() {
                                   {new Date(call.created_at).toLocaleTimeString()}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {call.prompt_tokens.toLocaleString()}
+                                  <div className="text-sm">
+                                    {call.total_tokens.toLocaleString()}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    {call.prompt_tokens.toLocaleString()} in / {call.completion_tokens.toLocaleString()} out
+                                  </div>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {call.completion_tokens.toLocaleString()}
+                                  <div className="text-sm font-medium text-red-600">
+                                    ${(call.provider_cost_usd ?? call.cost_usd ?? 0).toFixed(6)}
+                                  </div>
+                                  {call.model_pricing_input !== null && call.model_pricing_output !== null && (
+                                    <div className="text-xs text-muted-foreground">
+                                      ${call.model_pricing_input}/M in • ${call.model_pricing_output}/M out
+                                    </div>
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  {call.total_tokens.toLocaleString()}
+                                  <div className="text-sm font-medium text-green-600">
+                                    ${(call.client_cost_usd ?? call.cost_usd ?? 0).toFixed(6)}
+                                  </div>
                                 </TableCell>
                                 <TableCell className="text-right">
-                                  ${call.cost_usd.toFixed(6)}
+                                  <div className="text-sm font-medium text-blue-600">
+                                    ${((call.client_cost_usd ?? call.cost_usd ?? 0) - (call.provider_cost_usd ?? call.cost_usd ?? 0)).toFixed(6)}
+                                  </div>
+                                  {(call.provider_cost_usd ?? call.cost_usd ?? 0) > 0 && (
+                                    <div className="text-xs text-muted-foreground">
+                                      {((((call.client_cost_usd ?? call.cost_usd ?? 0) - (call.provider_cost_usd ?? call.cost_usd ?? 0)) / (call.provider_cost_usd ?? call.cost_usd ?? 1)) * 100).toFixed(1)}% markup
+                                    </div>
+                                  )}
                                 </TableCell>
                                 <TableCell className="text-right">
                                   {call.latency_ms ? `${call.latency_ms}ms` : '-'}
