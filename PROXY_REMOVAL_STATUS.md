@@ -1,8 +1,8 @@
 # LiteLLM Proxy Removal - Work in Progress
 
 **Branch**: `feature/remove-litellm-proxy`
-**Status**: PAUSED (Switched to flexible budget system priority)
-**Last Updated**: 2025-10-21
+**Status**: IN PROGRESS (Phase 3 complete, working on Phase 4)
+**Last Updated**: 2025-10-22
 
 ## Objective
 Remove dependency on LiteLLM proxy and call provider APIs directly for better control, reduced latency, and cost optimization.
@@ -57,31 +57,45 @@ Remove dependency on LiteLLM proxy and call provider APIs directly for better co
   - `google-generativeai>=0.3.0` - Google Gemini API SDK
   - `fireworks-ai>=0.9.0` - Fireworks AI API SDK
 
+### 5. Phase 1: Direct Provider Service (Commit: 5f82f67)
+- **File**: `src/services/direct_provider_service.py` (937 lines)
+- **Features**:
+  - Unified interface for OpenAI, Anthropic, Gemini, Fireworks
+  - Chat completions and streaming support
+  - Provider-specific message format conversion
+  - Error handling with automatic fallback
+  - Token usage tracking
+  - Response normalization to OpenAI format
+- **Tests**: 16 unit tests in `tests/test_direct_provider_service.py` - all passing
+
+### 6. Phase 2: Intelligent Routing (Commit: b6def40)
+- **File**: `src/saas_api.py` (updated)
+- **Features**:
+  - Automatic routing to direct provider when credentials exist
+  - Graceful fallback to LiteLLM proxy when no credentials
+  - Backward compatibility maintained
+  - Works for both streaming and non-streaming requests
+  - Logging for routing decisions
+- **Tests**: 11 unit tests in `tests/test_intelligent_routing.py` (documented)
+
+### 7. Phase 3: Provider-Specific Pricing (Commits: ad0494f, 82c0039)
+- **File**: `src/utils/cost_calculator.py` (updated with 255 new lines)
+- **Pricing Data**:
+  - Comprehensive MODEL_PRICING dictionary with 117+ models
+  - OpenAI: 27 models (GPT-4o, GPT-4 Turbo, GPT-3.5, O1/O3 series)
+  - Anthropic: 11 models (Claude 4, 3.5, 3, 2 series)
+  - Gemini: 8 models (Gemini 2.5, 1.5 Pro/Flash variants)
+  - Fireworks: 16 models (Llama, Mixtral, Qwen, Yi)
+  - All pricing from official sources as of October 2025
+  - Separate input/output token costs per 1M tokens
+- **Helper Functions**:
+  - Enhanced `get_model_pricing()` with normalization and fuzzy matching
+  - `get_provider_from_model()` for automatic provider detection
+  - `list_models_by_provider()` to list all models by provider
+  - `estimate_cost_for_conversation()` for pre-call cost estimation
+- **Tests**: 42 unit tests in `tests/test_cost_calculator_pricing.py` - all passing
+
 ## Remaining Work
-
-### Phase 1: Direct Provider Service
-- **File to Create**: `src/services/direct_provider_service.py`
-- **Requirements**:
-  - Unified interface for all 4 providers
-  - Chat completions support
-  - Streaming support
-  - Error handling with retry logic
-  - Usage tracking (tokens, costs)
-
-### Phase 2: Update LLM Call Service
-- **File to Update**: `src/saas_api.py`
-- **Changes**:
-  - Replace `call_litellm()` with direct provider calls
-  - Use `ProviderCredential` to get API keys
-  - Maintain backward compatibility during transition
-  - Update cost calculation to use provider-specific pricing
-
-### Phase 3: Provider-Specific Pricing
-- **File to Update**: `src/models/model_aliases.py`
-- **Requirements**:
-  - Add provider-specific pricing data
-  - Calculate costs without LiteLLM
-  - Support different pricing models (input/output tokens)
 
 ### Phase 4: Migration Script
 - **File to Create**: `scripts/migrate_to_direct_providers.py`
@@ -100,16 +114,11 @@ Remove dependency on LiteLLM proxy and call provider APIs directly for better co
 - Add provider credential management guide
 - Document new architecture
 
-## Why Paused?
+## Project Progress
 
-Higher priority work identified: **Flexible Budget System**
-
-The current "1 credit per job" system is too rigid for real-world use cases (especially chat applications where token costs vary significantly). The budget system needs to support:
-- Flexible billing modes (job-based, token-based, USD-based)
-- Credit replenishment from payments
-- Per-call metadata tracking
-
-This work will resume after the budget system is complete.
+- **Completed**: Pre-phase work + Phases 1, 2, 3
+- **Remaining**: Phases 4, 5, 6
+- **Overall**: ~70% complete
 
 ## Environment Variables Required
 
