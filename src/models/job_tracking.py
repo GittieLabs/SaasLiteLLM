@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 import uuid
 import enum
 from datetime import datetime
-from ..utils.datetime_helpers import to_utc_isoformat
+from utils.datetime_helpers import to_utc_isoformat
 
 Base = declarative_base()
 
@@ -19,7 +19,7 @@ Base = declarative_base()
 # Database session management
 def get_db():
     """Dependency for database session (to be configured with actual engine)"""
-    from ..config.settings import settings
+    from config.settings import settings
     from sqlalchemy import create_engine
     engine = create_engine(settings.database_url)
     SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

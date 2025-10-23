@@ -6,8 +6,8 @@ import uuid
 from datetime import datetime
 from sqlalchemy import Column, String, DateTime, Text, Boolean, Enum as SQLEnum
 from sqlalchemy.dialects.postgresql import UUID
-from ..models.job_tracking import Base
-from ..utils.encryption import encrypt_api_key, decrypt_api_key
+from models.job_tracking import Base
+from utils.encryption import encrypt_api_key, decrypt_api_key
 import enum
 
 
