@@ -6,9 +6,12 @@ Handles:
 - Calculating per-token costs using pricing per 1M tokens
 - Applying markup percentage for client billing
 - Converting costs to credits based on team budget mode
+
+Pricing data is loaded from llm_pricing_current.json at module import time.
 """
 from typing import Dict, Any, Optional
 from decimal import Decimal
+from utils.pricing_loader import load_pricing_from_json
 
 
 def calculate_token_costs(
@@ -148,127 +151,10 @@ def calculate_credits_to_deduct(
         return minimum_credits
 
 
-# Comprehensive model pricing (per 1M tokens)
-# Source: Provider pricing pages as of October 2025
-# Last updated: 2025-10-22
-MODEL_PRICING = {
-    # ========================================
-    # OPENAI MODELS
-    # ========================================
-
-    # GPT-4o (Latest flagship)
-    "gpt-4o": {"input": 5.00, "output": 20.00},
-    "gpt-4o-2024-08-06": {"input": 5.00, "output": 20.00},
-    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
-    "gpt-4o-mini-2024-07-18": {"input": 0.15, "output": 0.60},
-
-    # GPT-4 Turbo
-    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-    "gpt-4-turbo-preview": {"input": 10.00, "output": 30.00},
-    "gpt-4-turbo-2024-04-09": {"input": 10.00, "output": 30.00},
-    "gpt-4-1106-preview": {"input": 10.00, "output": 30.00},
-    "gpt-4-0125-preview": {"input": 10.00, "output": 30.00},
-
-    # GPT-4 (Original)
-    "gpt-4": {"input": 30.00, "output": 60.00},
-    "gpt-4-0613": {"input": 30.00, "output": 60.00},
-    "gpt-4-32k": {"input": 60.00, "output": 120.00},
-    "gpt-4-32k-0613": {"input": 60.00, "output": 120.00},
-
-    # GPT-3.5 Turbo
-    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
-    "gpt-3.5-turbo-0125": {"input": 0.50, "output": 1.50},
-    "gpt-3.5-turbo-1106": {"input": 0.50, "output": 1.50},
-    "gpt-3.5-turbo-16k": {"input": 3.00, "output": 4.00},
-
-    # O1 Models (Reasoning)
-    "o1-preview": {"input": 15.00, "output": 60.00},
-    "o1-mini": {"input": 3.00, "output": 12.00},
-    "o3-mini": {"input": 3.00, "output": 12.00},
-
-    # ========================================
-    # ANTHROPIC MODELS (CLAUDE)
-    # ========================================
-
-    # Claude 4 (Latest - 2025)
-    "claude-4.5-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-4.1-opus": {"input": 15.00, "output": 75.00},
-
-    # Claude 3.5
-    "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-3-5-sonnet-20240620": {"input": 3.00, "output": 15.00},
-    "claude-3.5-sonnet-20240620": {"input": 3.00, "output": 15.00},
-
-    # Claude 3
-    "claude-3-opus": {"input": 15.00, "output": 75.00},
-    "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
-    "claude-3-sonnet": {"input": 3.00, "output": 15.00},
-    "claude-3-sonnet-20240229": {"input": 3.00, "output": 15.00},
-    "claude-3-haiku": {"input": 0.25, "output": 1.25},
-    "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
-
-    # Claude 2
-    "claude-2.1": {"input": 8.00, "output": 24.00},
-    "claude-2.0": {"input": 8.00, "output": 24.00},
-    "claude-2": {"input": 8.00, "output": 24.00},
-
-    # ========================================
-    # GOOGLE GEMINI MODELS
-    # ========================================
-
-    # Gemini 2.5 (Latest)
-    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
-    "gemini-2.5-pro-preview": {"input": 1.25, "output": 10.00},
-
-    # Gemini 1.5
-    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-pro-001": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-pro-latest": {"input": 1.25, "output": 5.00},
-    "gemini-1.5-flash": {"input": 0.15, "output": 0.60},
-    "gemini-1.5-flash-001": {"input": 0.15, "output": 0.60},
-    "gemini-1.5-flash-latest": {"input": 0.15, "output": 0.60},
-    "gemini-1.5-flash-lite": {"input": 0.02, "output": 0.10},
-
-    # Gemini Pro (Original)
-    "gemini-pro": {"input": 0.50, "output": 1.50},
-    "gemini-pro-vision": {"input": 0.50, "output": 1.50},
-
-    # ========================================
-    # FIREWORKS AI MODELS
-    # ========================================
-
-    # Llama Models
-    "llama-v3-70b": {"input": 0.90, "output": 0.90},
-    "llama-v3-70b-instruct": {"input": 0.90, "output": 0.90},
-    "llama-3-70b": {"input": 0.90, "output": 0.90},
-    "llama-3-70b-instruct": {"input": 0.90, "output": 0.90},
-    "llama-v3-8b": {"input": 0.20, "output": 0.20},
-    "llama-v3-8b-instruct": {"input": 0.20, "output": 0.20},
-    "llama-3-8b": {"input": 0.20, "output": 0.20},
-    "llama-3-8b-instruct": {"input": 0.20, "output": 0.20},
-    "llama-2-70b": {"input": 0.90, "output": 0.90},
-    "llama-2-70b-chat": {"input": 0.90, "output": 0.90},
-    "llama-2-13b": {"input": 0.30, "output": 0.30},
-    "llama-2-13b-chat": {"input": 0.30, "output": 0.30},
-
-    # Mixtral Models
-    "mixtral-8x7b": {"input": 0.50, "output": 0.50},
-    "mixtral-8x7b-instruct": {"input": 0.50, "output": 0.50},
-    "mixtral-8x22b": {"input": 1.20, "output": 1.20},
-    "mixtral-8x22b-instruct": {"input": 1.20, "output": 1.20},
-
-    # Other Fireworks Models
-    "qwen-72b": {"input": 0.90, "output": 0.90},
-    "qwen-72b-chat": {"input": 0.90, "output": 0.90},
-    "yi-34b": {"input": 0.90, "output": 0.90},
-    "yi-34b-chat": {"input": 0.90, "output": 0.90},
-
-    # ========================================
-    # FALLBACK PRICING
-    # ========================================
-    "default": {"input": 1.00, "output": 2.00}
-}
+# Model pricing (per 1M tokens)
+# Loaded from llm_pricing_current.json at module import time
+# This replaces the previous hardcoded MODEL_PRICING dict
+MODEL_PRICING = load_pricing_from_json()
 
 
 def get_model_pricing(model_name: str) -> Dict[str, float]:
