@@ -148,26 +148,125 @@ def calculate_credits_to_deduct(
         return minimum_credits
 
 
-# Common model pricing (per 1M tokens)
-# Source: Provider pricing pages as of January 2025
+# Comprehensive model pricing (per 1M tokens)
+# Source: Provider pricing pages as of October 2025
+# Last updated: 2025-10-22
 MODEL_PRICING = {
-    # OpenAI models
-    "gpt-4": {"input": 30.00, "output": 60.00},
-    "gpt-4-32k": {"input": 60.00, "output": 120.00},
+    # ========================================
+    # OPENAI MODELS
+    # ========================================
+
+    # GPT-4o (Latest flagship)
+    "gpt-4o": {"input": 5.00, "output": 20.00},
+    "gpt-4o-2024-08-06": {"input": 5.00, "output": 20.00},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "gpt-4o-mini-2024-07-18": {"input": 0.15, "output": 0.60},
+
+    # GPT-4 Turbo
     "gpt-4-turbo": {"input": 10.00, "output": 30.00},
     "gpt-4-turbo-preview": {"input": 10.00, "output": 30.00},
+    "gpt-4-turbo-2024-04-09": {"input": 10.00, "output": 30.00},
+    "gpt-4-1106-preview": {"input": 10.00, "output": 30.00},
+    "gpt-4-0125-preview": {"input": 10.00, "output": 30.00},
+
+    # GPT-4 (Original)
+    "gpt-4": {"input": 30.00, "output": 60.00},
+    "gpt-4-0613": {"input": 30.00, "output": 60.00},
+    "gpt-4-32k": {"input": 60.00, "output": 120.00},
+    "gpt-4-32k-0613": {"input": 60.00, "output": 120.00},
+
+    # GPT-3.5 Turbo
     "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
+    "gpt-3.5-turbo-0125": {"input": 0.50, "output": 1.50},
+    "gpt-3.5-turbo-1106": {"input": 0.50, "output": 1.50},
     "gpt-3.5-turbo-16k": {"input": 3.00, "output": 4.00},
 
-    # Anthropic models
+    # O1 Models (Reasoning)
+    "o1-preview": {"input": 15.00, "output": 60.00},
+    "o1-mini": {"input": 3.00, "output": 12.00},
+    "o3-mini": {"input": 3.00, "output": 12.00},
+
+    # ========================================
+    # ANTHROPIC MODELS (CLAUDE)
+    # ========================================
+
+    # Claude 4 (Latest - 2025)
+    "claude-4.5-sonnet": {"input": 3.00, "output": 15.00},
+    "claude-4.1-opus": {"input": 15.00, "output": 75.00},
+
+    # Claude 3.5
+    "claude-3-5-sonnet": {"input": 3.00, "output": 15.00},
+    "claude-3.5-sonnet": {"input": 3.00, "output": 15.00},
+    "claude-3-5-sonnet-20240620": {"input": 3.00, "output": 15.00},
+    "claude-3.5-sonnet-20240620": {"input": 3.00, "output": 15.00},
+
+    # Claude 3
+    "claude-3-opus": {"input": 15.00, "output": 75.00},
     "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
+    "claude-3-sonnet": {"input": 3.00, "output": 15.00},
     "claude-3-sonnet-20240229": {"input": 3.00, "output": 15.00},
+    "claude-3-haiku": {"input": 0.25, "output": 1.25},
     "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
+
+    # Claude 2
     "claude-2.1": {"input": 8.00, "output": 24.00},
     "claude-2.0": {"input": 8.00, "output": 24.00},
+    "claude-2": {"input": 8.00, "output": 24.00},
 
-    # Add more models as needed
-    # Default fallback pricing
+    # ========================================
+    # GOOGLE GEMINI MODELS
+    # ========================================
+
+    # Gemini 2.5 (Latest)
+    "gemini-2.5-pro": {"input": 1.25, "output": 10.00},
+    "gemini-2.5-pro-preview": {"input": 1.25, "output": 10.00},
+
+    # Gemini 1.5
+    "gemini-1.5-pro": {"input": 1.25, "output": 5.00},
+    "gemini-1.5-pro-001": {"input": 1.25, "output": 5.00},
+    "gemini-1.5-pro-latest": {"input": 1.25, "output": 5.00},
+    "gemini-1.5-flash": {"input": 0.15, "output": 0.60},
+    "gemini-1.5-flash-001": {"input": 0.15, "output": 0.60},
+    "gemini-1.5-flash-latest": {"input": 0.15, "output": 0.60},
+    "gemini-1.5-flash-lite": {"input": 0.02, "output": 0.10},
+
+    # Gemini Pro (Original)
+    "gemini-pro": {"input": 0.50, "output": 1.50},
+    "gemini-pro-vision": {"input": 0.50, "output": 1.50},
+
+    # ========================================
+    # FIREWORKS AI MODELS
+    # ========================================
+
+    # Llama Models
+    "llama-v3-70b": {"input": 0.90, "output": 0.90},
+    "llama-v3-70b-instruct": {"input": 0.90, "output": 0.90},
+    "llama-3-70b": {"input": 0.90, "output": 0.90},
+    "llama-3-70b-instruct": {"input": 0.90, "output": 0.90},
+    "llama-v3-8b": {"input": 0.20, "output": 0.20},
+    "llama-v3-8b-instruct": {"input": 0.20, "output": 0.20},
+    "llama-3-8b": {"input": 0.20, "output": 0.20},
+    "llama-3-8b-instruct": {"input": 0.20, "output": 0.20},
+    "llama-2-70b": {"input": 0.90, "output": 0.90},
+    "llama-2-70b-chat": {"input": 0.90, "output": 0.90},
+    "llama-2-13b": {"input": 0.30, "output": 0.30},
+    "llama-2-13b-chat": {"input": 0.30, "output": 0.30},
+
+    # Mixtral Models
+    "mixtral-8x7b": {"input": 0.50, "output": 0.50},
+    "mixtral-8x7b-instruct": {"input": 0.50, "output": 0.50},
+    "mixtral-8x22b": {"input": 1.20, "output": 1.20},
+    "mixtral-8x22b-instruct": {"input": 1.20, "output": 1.20},
+
+    # Other Fireworks Models
+    "qwen-72b": {"input": 0.90, "output": 0.90},
+    "qwen-72b-chat": {"input": 0.90, "output": 0.90},
+    "yi-34b": {"input": 0.90, "output": 0.90},
+    "yi-34b-chat": {"input": 0.90, "output": 0.90},
+
+    # ========================================
+    # FALLBACK PRICING
+    # ========================================
     "default": {"input": 1.00, "output": 2.00}
 }
 
@@ -181,15 +280,160 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
 
     Returns:
         Dictionary with input and output prices per 1M tokens
+
+    Examples:
+        >>> get_model_pricing("gpt-4o")
+        {'input': 5.00, 'output': 20.00}
+
+        >>> get_model_pricing("claude-3-haiku")
+        {'input': 0.25, 'output': 1.25}
+
+        >>> get_model_pricing("unknown-model")
+        {'input': 1.00, 'output': 2.00}
     """
+    # Normalize model name
+    model_name_lower = model_name.lower().strip()
+
     # Try exact match first
+    if model_name_lower in MODEL_PRICING:
+        return MODEL_PRICING[model_name_lower]
+
+    # Try with original casing
     if model_name in MODEL_PRICING:
         return MODEL_PRICING[model_name]
 
     # Try partial match (e.g., "gpt-4-0613" matches "gpt-4")
-    for key in MODEL_PRICING:
-        if key in model_name or model_name.startswith(key):
+    # Check longest matches first for better accuracy
+    sorted_keys = sorted(MODEL_PRICING.keys(), key=len, reverse=True)
+    for key in sorted_keys:
+        if key == "default":
+            continue
+        if key in model_name_lower or model_name_lower.startswith(key):
             return MODEL_PRICING[key]
 
     # Fall back to default pricing
     return MODEL_PRICING["default"]
+
+
+def get_provider_from_model(model_name: str) -> str:
+    """
+    Detect provider from model name.
+
+    Args:
+        model_name: Name of the model
+
+    Returns:
+        Provider name: "openai", "anthropic", "gemini", "fireworks", or "unknown"
+
+    Examples:
+        >>> get_provider_from_model("gpt-4")
+        'openai'
+
+        >>> get_provider_from_model("claude-3-opus")
+        'anthropic'
+
+        >>> get_provider_from_model("gemini-pro")
+        'gemini'
+
+        >>> get_provider_from_model("llama-3-70b")
+        'fireworks'
+    """
+    model_lower = model_name.lower()
+
+    # OpenAI models
+    if any(prefix in model_lower for prefix in ["gpt-", "text-davinci", "o1-", "o3-"]):
+        return "openai"
+
+    # Anthropic models
+    if "claude" in model_lower:
+        return "anthropic"
+
+    # Google Gemini models
+    if "gemini" in model_lower:
+        return "gemini"
+
+    # Fireworks AI models
+    if any(prefix in model_lower for prefix in ["llama", "mixtral", "qwen", "yi-"]):
+        return "fireworks"
+
+    return "unknown"
+
+
+def list_models_by_provider(provider: str) -> list[str]:
+    """
+    List all models for a specific provider from our pricing table.
+
+    Args:
+        provider: Provider name ("openai", "anthropic", "gemini", "fireworks")
+
+    Returns:
+        List of model names for that provider
+
+    Example:
+        >>> models = list_models_by_provider("anthropic")
+        >>> "claude-3-opus" in models
+        True
+    """
+    provider_models = []
+
+    for model_name in MODEL_PRICING.keys():
+        if model_name == "default":
+            continue
+        detected_provider = get_provider_from_model(model_name)
+        if detected_provider == provider.lower():
+            provider_models.append(model_name)
+
+    return sorted(provider_models)
+
+
+def estimate_cost_for_conversation(
+    model_name: str,
+    messages: list,
+    average_chars_per_token: int = 4
+) -> Dict[str, float]:
+    """
+    Estimate the cost for a conversation before making the API call.
+
+    This is an approximation based on character count. Actual token count
+    may vary depending on the model's tokenizer.
+
+    Args:
+        model_name: Name of the model to use
+        messages: List of message dictionaries with 'content' fields
+        average_chars_per_token: Average characters per token (default: 4)
+
+    Returns:
+        Dictionary with estimated costs
+
+    Example:
+        >>> messages = [{"role": "user", "content": "Hello, how are you?"}]
+        >>> cost = estimate_cost_for_conversation("gpt-4o", messages)
+        >>> 'estimated_input_cost' in cost
+        True
+    """
+    # Calculate total characters in messages
+    total_chars = sum(len(msg.get("content", "")) for msg in messages)
+
+    # Estimate tokens (rough approximation)
+    estimated_tokens = total_chars // average_chars_per_token
+
+    # Get model pricing
+    pricing = get_model_pricing(model_name)
+
+    # Calculate estimated input cost
+    estimated_input_cost = (estimated_tokens / 1_000_000) * pricing["input"]
+
+    # For output, estimate 20% of input length (conservative estimate)
+    estimated_output_tokens = int(estimated_tokens * 0.2)
+    estimated_output_cost = (estimated_output_tokens / 1_000_000) * pricing["output"]
+
+    return {
+        "estimated_input_tokens": estimated_tokens,
+        "estimated_output_tokens": estimated_output_tokens,
+        "estimated_input_cost_usd": round(estimated_input_cost, 6),
+        "estimated_output_cost_usd": round(estimated_output_cost, 6),
+        "estimated_total_cost_usd": round(estimated_input_cost + estimated_output_cost, 6),
+        "model": model_name,
+        "pricing_input_per_1m": pricing["input"],
+        "pricing_output_per_1m": pricing["output"]
+    }
