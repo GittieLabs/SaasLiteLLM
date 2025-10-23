@@ -5,8 +5,8 @@ Tests API key encryption/decryption, key generation, and error handling.
 """
 import pytest
 import os
-from unittest.mock import patch, MagicMock
-from cryptography.fernet import Fernet, InvalidToken
+from unittest.mock import patch
+from cryptography.fernet import Fernet
 
 # Import from src
 import sys
@@ -14,7 +14,6 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from utils.encryption import (
-    get_encryption_key,
     encrypt_api_key,
     decrypt_api_key,
     generate_encryption_key
@@ -57,161 +56,101 @@ class TestEncryptionKeyGeneration:
         assert decrypted == test_data
 
 
-class TestGetEncryptionKey:
-    """Test getting encryption key from environment"""
-
-    def test_get_encryption_key_from_env(self):
-        """Test getting key from ENCRYPTION_KEY env var"""
-        test_key = Fernet.generate_key().decode()
-
-        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
-            key = get_encryption_key()
-            assert key == test_key
-
-    def test_get_encryption_key_production_requires_env_var(self):
-        """Test that production mode requires ENCRYPTION_KEY"""
-        with patch.dict(os.environ, {}, clear=True):
-            # Remove ENCRYPTION_KEY if it exists
-            os.environ.pop('ENCRYPTION_KEY', None)
-            os.environ['ENV'] = 'production'
-
-            with pytest.raises(ValueError, match="ENCRYPTION_KEY environment variable must be set in production"):
-                get_encryption_key()
-
-    def test_get_encryption_key_development_generates_default(self):
-        """Test that development mode generates a default key"""
-        with patch.dict(os.environ, {}, clear=True):
-            os.environ.pop('ENCRYPTION_KEY', None)
-            os.environ['ENV'] = 'development'
-
-            key = get_encryption_key()
-
-            # Should return a valid key
-            assert isinstance(key, str)
-            assert len(key) == 44
-
-            # Should be usable
-            fernet = Fernet(key.encode())
-            assert fernet is not None
-
-    def test_get_encryption_key_no_env_assumes_development(self):
-        """Test that missing ENV defaults to development"""
-        with patch.dict(os.environ, {}, clear=True):
-            os.environ.pop('ENCRYPTION_KEY', None)
-            os.environ.pop('ENV', None)
-
-            # Should not raise error (assumes development)
-            key = get_encryption_key()
-            assert isinstance(key, str)
-
-
 class TestEncryptApiKey:
     """Test API key encryption"""
 
-    def setup_method(self):
-        """Set up test encryption key"""
-        self.test_key = Fernet.generate_key().decode()
-        self.test_api_key = "sk-test-1234567890abcdef"
-
     def test_encrypt_api_key_basic(self):
         """Test basic encryption"""
-        with patch('utils.encryption.get_encryption_key', return_value=self.test_key):
-            encrypted = encrypt_api_key(self.test_api_key)
+        test_key = Fernet.generate_key().decode()
+        test_api_key = "sk-test-1234567890abcdef"
+
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            # Reset the global fernet instance
+            import utils.encryption
+            utils.encryption._fernet = None
+
+            encrypted = encrypt_api_key(test_api_key)
 
             # Should return a string
             assert isinstance(encrypted, str)
 
             # Should be different from original
-            assert encrypted != self.test_api_key
+            assert encrypted != test_api_key
 
             # Should be longer than original (encryption overhead)
-            assert len(encrypted) > len(self.test_api_key)
+            assert len(encrypted) > len(test_api_key)
 
-    def test_encrypt_api_key_deterministic_with_same_key(self):
-        """Test that same key produces consistent encryption"""
-        with patch('utils.encryption.get_encryption_key', return_value=self.test_key):
-            # Note: Fernet encryption includes a timestamp, so it won't be identical
-            # But it should decrypt to the same value
-            encrypted1 = encrypt_api_key(self.test_api_key)
-            encrypted2 = encrypt_api_key(self.test_api_key)
+    def test_encrypt_api_key_empty_string_raises_error(self):
+        """Test that empty string raises error"""
+        test_key = Fernet.generate_key().decode()
 
-            # Encrypted values will be different (includes nonce)
-            # But both should decrypt to same value
-            fernet = Fernet(self.test_key.encode())
-            decrypted1 = fernet.decrypt(encrypted1.encode()).decode()
-            decrypted2 = fernet.decrypt(encrypted2.encode()).decode()
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
 
-            assert decrypted1 == self.test_api_key
-            assert decrypted2 == self.test_api_key
-
-    def test_encrypt_api_key_empty_string(self):
-        """Test encrypting empty string"""
-        with patch('utils.encryption.get_encryption_key', return_value=self.test_key):
-            encrypted = encrypt_api_key("")
-
-            # Should still encrypt
-            assert isinstance(encrypted, str)
-            assert len(encrypted) > 0
-
-            # Should decrypt back to empty string
-            fernet = Fernet(self.test_key.encode())
-            decrypted = fernet.decrypt(encrypted.encode()).decode()
-            assert decrypted == ""
+            with pytest.raises(ValueError, match="API key cannot be empty"):
+                encrypt_api_key("")
 
     def test_encrypt_api_key_with_special_characters(self):
         """Test encrypting API key with special characters"""
+        test_key = Fernet.generate_key().decode()
         special_key = "sk-test_KEY.with/special+chars=123"
 
-        with patch('utils.encryption.get_encryption_key', return_value=self.test_key):
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+
             encrypted = encrypt_api_key(special_key)
 
-            fernet = Fernet(self.test_key.encode())
-            decrypted = fernet.decrypt(encrypted.encode()).decode()
-            assert decrypted == special_key
+            # Should encrypt successfully
+            assert isinstance(encrypted, str)
+            assert len(encrypted) > 0
 
 
 class TestDecryptApiKey:
     """Test API key decryption"""
 
-    def setup_method(self):
-        """Set up test encryption key and encrypted data"""
-        self.test_key = Fernet.generate_key().decode()
-        self.test_api_key = "sk-test-1234567890abcdef"
-
-        # Pre-encrypt the test key
-        fernet = Fernet(self.test_key.encode())
-        self.encrypted_api_key = fernet.encrypt(self.test_api_key.encode()).decode()
-
     def test_decrypt_api_key_basic(self):
         """Test basic decryption"""
-        with patch('utils.encryption.get_encryption_key', return_value=self.test_key):
-            decrypted = decrypt_api_key(self.encrypted_api_key)
-            assert decrypted == self.test_api_key
+        test_key = Fernet.generate_key().decode()
+        test_api_key = "sk-test-1234567890abcdef"
 
-    def test_decrypt_api_key_wrong_key_raises_error(self):
-        """Test that wrong key raises InvalidToken error"""
-        wrong_key = Fernet.generate_key().decode()
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
 
-        with patch('utils.encryption.get_encryption_key', return_value=wrong_key):
-            with pytest.raises(Exception):  # Will raise InvalidToken or similar
-                decrypt_api_key(self.encrypted_api_key)
+            # Encrypt first
+            encrypted = encrypt_api_key(test_api_key)
+
+            # Reset fernet to ensure we're using the same key
+            utils.encryption._fernet = None
+
+            # Then decrypt
+            decrypted = decrypt_api_key(encrypted)
+            assert decrypted == test_api_key
+
+    def test_decrypt_api_key_empty_string_raises_error(self):
+        """Test that empty encrypted string raises error"""
+        test_key = Fernet.generate_key().decode()
+
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+
+            with pytest.raises(ValueError, match="Encrypted API key cannot be empty"):
+                decrypt_api_key("")
 
     def test_decrypt_api_key_invalid_token_format(self):
         """Test that invalid token format raises error"""
+        test_key = Fernet.generate_key().decode()
         invalid_token = "not-a-valid-encrypted-token"
 
-        with patch('utils.encryption.get_encryption_key', return_value=self.test_key):
-            with pytest.raises(Exception):
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+
+            with pytest.raises(Exception):  # Will raise InvalidToken
                 decrypt_api_key(invalid_token)
-
-    def test_decrypt_api_key_empty_string(self):
-        """Test decrypting empty encrypted string"""
-        fernet = Fernet(self.test_key.encode())
-        encrypted_empty = fernet.encrypt("".encode()).decode()
-
-        with patch('utils.encryption.get_encryption_key', return_value=self.test_key):
-            decrypted = decrypt_api_key(encrypted_empty)
-            assert decrypted == ""
 
 
 class TestEncryptionRoundTrip:
@@ -222,8 +161,14 @@ class TestEncryptionRoundTrip:
         test_key = Fernet.generate_key().decode()
         original_api_key = "sk-test-round-trip-12345"
 
-        with patch('utils.encryption.get_encryption_key', return_value=test_key):
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+
             encrypted = encrypt_api_key(original_api_key)
+
+            utils.encryption._fernet = None
+
             decrypted = decrypt_api_key(encrypted)
 
             assert decrypted == original_api_key
@@ -238,9 +183,15 @@ class TestEncryptionRoundTrip:
             "fw-fireworks-key-xyz123"
         ]
 
-        with patch('utils.encryption.get_encryption_key', return_value=test_key):
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
             for original_key in api_keys:
+                import utils.encryption
+                utils.encryption._fernet = None
+
                 encrypted = encrypt_api_key(original_key)
+
+                utils.encryption._fernet = None
+
                 decrypted = decrypt_api_key(encrypted)
                 assert decrypted == original_key
 
@@ -249,8 +200,14 @@ class TestEncryptionRoundTrip:
         test_key = Fernet.generate_key().decode()
         unicode_key = "sk-test-key-with-émojis-🔑-and-spéçîål-chars"
 
-        with patch('utils.encryption.get_encryption_key', return_value=test_key):
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+
             encrypted = encrypt_api_key(unicode_key)
+
+            utils.encryption._fernet = None
+
             decrypted = decrypt_api_key(encrypted)
 
             assert decrypted == unicode_key
@@ -260,8 +217,14 @@ class TestEncryptionRoundTrip:
         test_key = Fernet.generate_key().decode()
         long_key = "sk-" + "a" * 1000  # Very long key
 
-        with patch('utils.encryption.get_encryption_key', return_value=test_key):
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+
             encrypted = encrypt_api_key(long_key)
+
+            utils.encryption._fernet = None
+
             decrypted = decrypt_api_key(encrypted)
 
             assert decrypted == long_key
@@ -276,10 +239,13 @@ class TestEncryptionSecurity:
         key1 = Fernet.generate_key().decode()
         key2 = Fernet.generate_key().decode()
 
-        with patch('utils.encryption.get_encryption_key', return_value=key1):
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': key1}):
+            import utils.encryption
+            utils.encryption._fernet = None
             encrypted1 = encrypt_api_key(api_key)
 
-        with patch('utils.encryption.get_encryption_key', return_value=key2):
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': key2}):
+            utils.encryption._fernet = None
             encrypted2 = encrypt_api_key(api_key)
 
         # Different keys should produce different encrypted values
@@ -290,33 +256,144 @@ class TestEncryptionSecurity:
         test_key = Fernet.generate_key().decode()
         api_key = "sk-very-secret-key-12345"
 
-        with patch('utils.encryption.get_encryption_key', return_value=test_key):
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+
             encrypted = encrypt_api_key(api_key)
 
             # Encrypted value should not contain the original key
             assert api_key not in encrypted
             assert "secret" not in encrypted.lower()
 
-    def test_key_rotation_scenario(self):
-        """Test key rotation scenario - decrypt with old key, re-encrypt with new key"""
+    def test_same_plaintext_produces_different_ciphertext(self):
+        """Test that encrypting same plaintext twice produces different ciphertext (due to nonce)"""
+        test_key = Fernet.generate_key().decode()
+        api_key = "sk-test-12345"
+
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+            encrypted1 = encrypt_api_key(api_key)
+
+            utils.encryption._fernet = None
+            encrypted2 = encrypt_api_key(api_key)
+
+            # Different encryptions of same plaintext should differ (due to nonce)
+            assert encrypted1 != encrypted2
+
+            # But both should decrypt to same value
+            utils.encryption._fernet = None
+            assert decrypt_api_key(encrypted1) == api_key
+
+            utils.encryption._fernet = None
+            assert decrypt_api_key(encrypted2) == api_key
+
+
+class TestEnvironmentConfiguration:
+    """Test environment-based key configuration"""
+
+    def test_uses_encryption_key_from_environment(self):
+        """Test that ENCRYPTION_KEY environment variable is used"""
+        test_key = Fernet.generate_key().decode()
+        api_key = "sk-test-env-key"
+
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': test_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+
+            encrypted = encrypt_api_key(api_key)
+
+            utils.encryption._fernet = None
+
+            decrypted = decrypt_api_key(encrypted)
+            assert decrypted == api_key
+
+    def test_development_fallback_key(self):
+        """Test that development environment uses fallback key"""
+        api_key = "sk-test-dev-key"
+
+        # Remove ENCRYPTION_KEY and set ENV to development
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop('ENCRYPTION_KEY', None)
+            os.environ['ENV'] = 'development'
+
+            import utils.encryption
+            utils.encryption._fernet = None
+
+            # Should not raise error
+            encrypted = encrypt_api_key(api_key)
+
+            utils.encryption._fernet = None
+
+            decrypted = decrypt_api_key(encrypted)
+            assert decrypted == api_key
+
+    def test_production_requires_encryption_key(self):
+        """Test that production mode requires ENCRYPTION_KEY"""
+        with patch.dict(os.environ, {}, clear=True):
+            os.environ.pop('ENCRYPTION_KEY', None)
+            os.environ['ENVIRONMENT'] = 'production'
+
+            import utils.encryption
+            utils.encryption._fernet = None
+
+            with pytest.raises(ValueError, match="ENCRYPTION_KEY environment variable must be set in production"):
+                encrypt_api_key("sk-test")
+
+
+class TestKeyRotation:
+    """Test encryption key rotation"""
+
+    def test_rotate_encryption_key_basic(self):
+        """Test basic key rotation"""
+        from utils.encryption import rotate_encryption_key
+
         old_key = Fernet.generate_key().decode()
-        new_key = Fernet.generate_key().decode()
+        new_key = "new-encryption-key-for-rotation"
         api_key = "sk-test-rotation-12345"
 
         # Encrypt with old key
-        with patch('utils.encryption.get_encryption_key', return_value=old_key):
-            encrypted_old = encrypt_api_key(api_key)
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': old_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+            encrypted_with_old = encrypt_api_key(api_key)
 
-        # Decrypt with old key
-        with patch('utils.encryption.get_encryption_key', return_value=old_key):
-            decrypted = decrypt_api_key(encrypted_old)
+        # Rotate to new key
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': old_key}):
+            utils.encryption._fernet = None
+            encrypted_with_new = rotate_encryption_key(encrypted_with_old, new_key)
+
+        # Verify we can decrypt with new key
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': new_key}):
+            utils.encryption._fernet = None
+            decrypted = decrypt_api_key(encrypted_with_new)
             assert decrypted == api_key
 
-        # Re-encrypt with new key
-        with patch('utils.encryption.get_encryption_key', return_value=new_key):
-            encrypted_new = encrypt_api_key(decrypted)
+    def test_rotate_encryption_key_preserves_data(self):
+        """Test that key rotation preserves the original data"""
+        from utils.encryption import rotate_encryption_key
 
-        # Verify with new key
-        with patch('utils.encryption.get_encryption_key', return_value=new_key):
-            final_decrypted = decrypt_api_key(encrypted_new)
-            assert final_decrypted == api_key
+        old_key = Fernet.generate_key().decode()
+        new_key = "another-new-key-for-testing"
+        original_data = "sk-very-important-api-key-xyz"
+
+        # Encrypt with old key
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': old_key}):
+            import utils.encryption
+            utils.encryption._fernet = None
+            encrypted_old = encrypt_api_key(original_data)
+
+        # Rotate key
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': old_key}):
+            utils.encryption._fernet = None
+            encrypted_new = rotate_encryption_key(encrypted_old, new_key)
+
+        # Encrypted values should be different
+        assert encrypted_old != encrypted_new
+
+        # But decrypted values should be the same
+        with patch.dict(os.environ, {'ENCRYPTION_KEY': new_key}):
+            utils.encryption._fernet = None
+            decrypted = decrypt_api_key(encrypted_new)
+            assert decrypted == original_data

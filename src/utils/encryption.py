@@ -10,7 +10,7 @@ import base64
 from typing import Optional
 from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
 # Global Fernet instance
 _fernet: Optional[Fernet] = None
@@ -40,7 +40,7 @@ def _get_encryption_key() -> bytes:
         key_str = "dev-encryption-key-change-in-production-12345678"
 
     # Derive a proper 32-byte key using PBKDF2
-    kdf = PBKDF2(
+    kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=b"saas-litellm-salt",  # Static salt for key derivation
@@ -157,7 +157,7 @@ def rotate_encryption_key(old_encrypted_value: str, new_key: str) -> str:
     decrypted = decrypt_api_key(old_encrypted_value)
 
     # Create new Fernet instance with new key
-    kdf = PBKDF2(
+    kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         length=32,
         salt=b"saas-litellm-salt",
