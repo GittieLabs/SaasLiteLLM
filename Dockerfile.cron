@@ -1,0 +1,41 @@
+# Dockerfile for Pricing Update Cron Service
+# Runs scheduled pricing updates for LLM models
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy dependency files from project root
+COPY pyproject.toml ./
+COPY README.md ./
+
+# Copy application code from project root
+COPY src/ ./src/
+COPY cron/ ./cron/
+
+# Install build tools and Python dependencies
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir hatchling && \
+    pip install --no-cache-dir .
+
+# Create data directories for cron results
+RUN mkdir -p /app/data/cron_results && \
+    mkdir -p /app/data
+
+# Create non-root user for security
+RUN useradd -m -u 1000 cronuser && \
+    chown -R cronuser:cronuser /app
+
+USER cronuser
+
+# Make cron script executable
+RUN chmod +x /app/cron/pricing_update_job.py
+
+# Run the pricing update job
+CMD ["python3", "/app/cron/pricing_update_job.py"]
