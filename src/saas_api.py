@@ -1202,6 +1202,9 @@ async def create_and_call_job_stream(
 
     # Create streaming generator
     async def stream_and_complete():
+        import logging
+        logger = logging.getLogger(__name__)
+
         # Send immediate keepalive to establish connection
         yield ": keepalive\n\n"
 
@@ -1211,6 +1214,10 @@ async def create_and_call_job_stream(
         litellm_request_id = None
         start_time = datetime.utcnow()
         llm_call_successful = False
+
+        # Log stream start
+        logger.info(f"[STREAM-START] job_id={job_id_value}, model={primary_model}, org={organization_id_value}")
+        logger.info(f"[STREAM-START] Has org_id: {organization_id_value is not None}, Has virtual_key: {virtual_key_value is not None}")
 
         try:
             # Use call_litellm with streaming - this routes through direct provider service
@@ -1233,12 +1240,19 @@ async def create_and_call_job_stream(
                 organization_id=organization_id_value
             )
 
+            # Log stream response received
+            logger.info(f"[STREAM-RESPONSE] Received stream_response, type={type(stream_response).__name__}")
+            logger.info(f"[STREAM-RESPONSE] Status will be checked on context enter")
+
             # Stream response is an httpx.Response object - iterate over it
+            chunk_counter = 0
             async with stream_response:
                 stream_response.raise_for_status()
+                logger.info(f"[STREAM-RESPONSE] Status code: {stream_response.status_code}, Headers: {dict(stream_response.headers)}")
 
                 # Stream chunks to client
                 async for line in stream_response.aiter_lines():
+                    chunk_counter += 1
                     if line.startswith("data: "):
                         chunk_data = line[6:]  # Remove "data: " prefix
 
@@ -1253,12 +1267,21 @@ async def create_and_call_job_stream(
                             # Extract request ID from first chunk
                             if litellm_request_id is None:
                                 litellm_request_id = chunk_json.get("id")
+                                logger.info(f"[STREAM-CHUNK-1] First chunk, request_id={litellm_request_id}")
 
                             # Accumulate content
+                            has_content = False
                             if "choices" in chunk_json:
                                 for choice in chunk_json["choices"]:
                                     if "delta" in choice and "content" in choice["delta"]:
-                                        accumulated_content += choice["delta"]["content"]
+                                        content_piece = choice["delta"]["content"]
+                                        accumulated_content += content_piece
+                                        has_content = True
+
+                            # Log every 10th chunk with sample content
+                            if chunk_counter % 10 == 0:
+                                preview = accumulated_content[:100] if accumulated_content else "(no content yet)"
+                                logger.info(f"[STREAM-CHUNK-{chunk_counter}] Accumulated so far: {len(accumulated_content)} chars, preview: {preview}...")
 
                             # Extract usage if present (usually in last chunk)
                             if "usage" in chunk_json:
@@ -1267,11 +1290,13 @@ async def create_and_call_job_stream(
                                     "completion": chunk_json["usage"].get("completion_tokens", 0),
                                     "total": chunk_json["usage"].get("total_tokens", 0)
                                 }
+                                logger.info(f"[STREAM-USAGE] Received usage tokens: {accumulated_tokens}")
 
                             # Stream to client immediately
                             yield f"data: {chunk_data}\n\n"
 
                         except json.JSONDecodeError:
+                            logger.warning(f"[STREAM-CHUNK] JSONDecodeError on chunk {chunk_counter}")
                             continue
 
             # After streaming completes, store in database
@@ -1311,6 +1336,9 @@ async def create_and_call_job_stream(
             db.add(llm_call)
             db.commit()
             llm_call_successful = True
+
+            # Log final streaming summary
+            logger.info(f"[STREAM-COMPLETE] Total chunks: {chunk_counter}, Content length: {len(accumulated_content)} chars, Tokens: {accumulated_tokens}")
 
             # Step 3: Complete job and deduct credits
             job_to_complete = db.query(Job).filter(Job.job_id == job_id_value).first()
@@ -1370,6 +1398,11 @@ async def create_and_call_job_stream(
                 db.commit()
 
         except Exception as e:
+            # Log the exception with full traceback
+            import traceback
+            logger.error(f"[STREAM-ERROR] Exception during streaming: {str(e)}")
+            logger.error(f"[STREAM-ERROR] Traceback:\n{traceback.format_exc()}")
+
             # Record failed call
             llm_call = LLMCall(
                 job_id=job_id_value,
