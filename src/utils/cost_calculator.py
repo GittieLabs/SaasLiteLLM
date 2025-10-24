@@ -6,9 +6,12 @@ Handles:
 - Calculating per-token costs using pricing per 1M tokens
 - Applying markup percentage for client billing
 - Converting costs to credits based on team budget mode
+
+Pricing data is loaded from llm_pricing_current.json at module import time.
 """
 from typing import Dict, Any, Optional
 from decimal import Decimal
+from utils.pricing_loader import load_pricing_from_json
 
 
 def calculate_token_costs(
@@ -148,28 +151,10 @@ def calculate_credits_to_deduct(
         return minimum_credits
 
 
-# Common model pricing (per 1M tokens)
-# Source: Provider pricing pages as of January 2025
-MODEL_PRICING = {
-    # OpenAI models
-    "gpt-4": {"input": 30.00, "output": 60.00},
-    "gpt-4-32k": {"input": 60.00, "output": 120.00},
-    "gpt-4-turbo": {"input": 10.00, "output": 30.00},
-    "gpt-4-turbo-preview": {"input": 10.00, "output": 30.00},
-    "gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
-    "gpt-3.5-turbo-16k": {"input": 3.00, "output": 4.00},
-
-    # Anthropic models
-    "claude-3-opus-20240229": {"input": 15.00, "output": 75.00},
-    "claude-3-sonnet-20240229": {"input": 3.00, "output": 15.00},
-    "claude-3-haiku-20240307": {"input": 0.25, "output": 1.25},
-    "claude-2.1": {"input": 8.00, "output": 24.00},
-    "claude-2.0": {"input": 8.00, "output": 24.00},
-
-    # Add more models as needed
-    # Default fallback pricing
-    "default": {"input": 1.00, "output": 2.00}
-}
+# Model pricing (per 1M tokens)
+# Loaded from llm_pricing_current.json at module import time
+# This replaces the previous hardcoded MODEL_PRICING dict
+MODEL_PRICING = load_pricing_from_json()
 
 
 def get_model_pricing(model_name: str) -> Dict[str, float]:
@@ -181,15 +166,160 @@ def get_model_pricing(model_name: str) -> Dict[str, float]:
 
     Returns:
         Dictionary with input and output prices per 1M tokens
+
+    Examples:
+        >>> get_model_pricing("gpt-4o")
+        {'input': 5.00, 'output': 20.00}
+
+        >>> get_model_pricing("claude-3-haiku")
+        {'input': 0.25, 'output': 1.25}
+
+        >>> get_model_pricing("unknown-model")
+        {'input': 1.00, 'output': 2.00}
     """
+    # Normalize model name
+    model_name_lower = model_name.lower().strip()
+
     # Try exact match first
+    if model_name_lower in MODEL_PRICING:
+        return MODEL_PRICING[model_name_lower]
+
+    # Try with original casing
     if model_name in MODEL_PRICING:
         return MODEL_PRICING[model_name]
 
     # Try partial match (e.g., "gpt-4-0613" matches "gpt-4")
-    for key in MODEL_PRICING:
-        if key in model_name or model_name.startswith(key):
+    # Check longest matches first for better accuracy
+    sorted_keys = sorted(MODEL_PRICING.keys(), key=len, reverse=True)
+    for key in sorted_keys:
+        if key == "default":
+            continue
+        if key in model_name_lower or model_name_lower.startswith(key):
             return MODEL_PRICING[key]
 
     # Fall back to default pricing
     return MODEL_PRICING["default"]
+
+
+def get_provider_from_model(model_name: str) -> str:
+    """
+    Detect provider from model name.
+
+    Args:
+        model_name: Name of the model
+
+    Returns:
+        Provider name: "openai", "anthropic", "gemini", "fireworks", or "unknown"
+
+    Examples:
+        >>> get_provider_from_model("gpt-4")
+        'openai'
+
+        >>> get_provider_from_model("claude-3-opus")
+        'anthropic'
+
+        >>> get_provider_from_model("gemini-pro")
+        'gemini'
+
+        >>> get_provider_from_model("llama-3-70b")
+        'fireworks'
+    """
+    model_lower = model_name.lower()
+
+    # OpenAI models
+    if any(prefix in model_lower for prefix in ["gpt-", "text-davinci", "o1-", "o3-"]):
+        return "openai"
+
+    # Anthropic models
+    if "claude" in model_lower:
+        return "anthropic"
+
+    # Google Gemini models
+    if "gemini" in model_lower:
+        return "gemini"
+
+    # Fireworks AI models
+    if any(prefix in model_lower for prefix in ["llama", "mixtral", "qwen", "yi-"]):
+        return "fireworks"
+
+    return "unknown"
+
+
+def list_models_by_provider(provider: str) -> list[str]:
+    """
+    List all models for a specific provider from our pricing table.
+
+    Args:
+        provider: Provider name ("openai", "anthropic", "gemini", "fireworks")
+
+    Returns:
+        List of model names for that provider
+
+    Example:
+        >>> models = list_models_by_provider("anthropic")
+        >>> "claude-3-opus" in models
+        True
+    """
+    provider_models = []
+
+    for model_name in MODEL_PRICING.keys():
+        if model_name == "default":
+            continue
+        detected_provider = get_provider_from_model(model_name)
+        if detected_provider == provider.lower():
+            provider_models.append(model_name)
+
+    return sorted(provider_models)
+
+
+def estimate_cost_for_conversation(
+    model_name: str,
+    messages: list,
+    average_chars_per_token: int = 4
+) -> Dict[str, float]:
+    """
+    Estimate the cost for a conversation before making the API call.
+
+    This is an approximation based on character count. Actual token count
+    may vary depending on the model's tokenizer.
+
+    Args:
+        model_name: Name of the model to use
+        messages: List of message dictionaries with 'content' fields
+        average_chars_per_token: Average characters per token (default: 4)
+
+    Returns:
+        Dictionary with estimated costs
+
+    Example:
+        >>> messages = [{"role": "user", "content": "Hello, how are you?"}]
+        >>> cost = estimate_cost_for_conversation("gpt-4o", messages)
+        >>> 'estimated_input_cost' in cost
+        True
+    """
+    # Calculate total characters in messages
+    total_chars = sum(len(msg.get("content", "")) for msg in messages)
+
+    # Estimate tokens (rough approximation)
+    estimated_tokens = total_chars // average_chars_per_token
+
+    # Get model pricing
+    pricing = get_model_pricing(model_name)
+
+    # Calculate estimated input cost
+    estimated_input_cost = (estimated_tokens / 1_000_000) * pricing["input"]
+
+    # For output, estimate 20% of input length (conservative estimate)
+    estimated_output_tokens = int(estimated_tokens * 0.2)
+    estimated_output_cost = (estimated_output_tokens / 1_000_000) * pricing["output"]
+
+    return {
+        "estimated_input_tokens": estimated_tokens,
+        "estimated_output_tokens": estimated_output_tokens,
+        "estimated_input_cost_usd": round(estimated_input_cost, 6),
+        "estimated_output_cost_usd": round(estimated_output_cost, 6),
+        "estimated_total_cost_usd": round(estimated_input_cost + estimated_output_cost, 6),
+        "model": model_name,
+        "pricing_input_per_1m": pricing["input"],
+        "pricing_output_per_1m": pricing["output"]
+    }

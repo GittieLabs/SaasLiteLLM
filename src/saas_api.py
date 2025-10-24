@@ -30,7 +30,7 @@ from .utils.cost_calculator import (
 )
 
 # Import new API routers
-from .api import organizations, model_groups, teams, credits, dashboard, models, model_access_groups, admin_users, jobs
+from .api import organizations, model_groups, teams, credits, dashboard, models, model_access_groups, admin_users, jobs, provider_credentials
 
 # Import authentication
 from .auth.dependencies import verify_virtual_key
@@ -67,6 +67,7 @@ app.include_router(dashboard.router)
 app.include_router(models.router)
 app.include_router(model_access_groups.router)
 app.include_router(jobs.router)
+app.include_router(provider_credentials.router)
 
 # Database setup
 engine = create_engine(settings.database_url)
@@ -203,13 +204,86 @@ async def call_litellm(
     frequency_penalty: Optional[float] = None,
     presence_penalty: Optional[float] = None,
     stop: Optional[List[str]] = None,
-    stream: bool = False
+    stream: bool = False,
+    db: Optional[Session] = None,
+    organization_id: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Call LiteLLM proxy with resolved model and team-specific virtual key.
+    Call LLM provider - routes to direct provider API if credentials exist, otherwise uses LiteLLM proxy.
+
+    This function intelligently routes requests:
+    1. If organization_id provided and provider credentials exist → Direct provider API
+    2. Otherwise → LiteLLM proxy (backward compatible)
+
     Returns response with usage and cost data.
     Supports all OpenAI parameters including structured outputs and function calling.
     """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Try direct provider routing if we have DB access and organization_id
+    if db is not None and organization_id is not None:
+        try:
+            from .services.direct_provider_service import get_direct_provider_service
+
+            direct_service = get_direct_provider_service()
+
+            # Detect provider from model name
+            provider = direct_service.detect_provider_from_model(model)
+
+            # Try to get provider credentials
+            credential_result = await direct_service.get_provider_credential(
+                db=db,
+                organization_id=organization_id,
+                provider=provider
+            )
+
+            if credential_result:
+                api_key, provider_name = credential_result
+                logger.info(f"Routing to direct {provider_name} API for model {model}")
+
+                # Route to direct provider
+                if stream:
+                    # For streaming, return the httpx.Response object
+                    return await direct_service.chat_completion_stream(
+                        provider=provider_name,
+                        api_key=api_key,
+                        model=model,
+                        messages=messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        response_format=response_format,
+                        tools=tools,
+                        tool_choice=tool_choice,
+                        top_p=top_p,
+                        frequency_penalty=frequency_penalty,
+                        presence_penalty=presence_penalty,
+                        stop=stop
+                    )
+                else:
+                    # For non-streaming, return the dict response
+                    return await direct_service.chat_completion(
+                        provider=provider_name,
+                        api_key=api_key,
+                        model=model,
+                        messages=messages,
+                        temperature=temperature,
+                        max_tokens=max_tokens,
+                        response_format=response_format,
+                        tools=tools,
+                        tool_choice=tool_choice,
+                        top_p=top_p,
+                        frequency_penalty=frequency_penalty,
+                        presence_penalty=presence_penalty,
+                        stop=stop
+                    )
+            else:
+                logger.debug(f"No provider credentials found for {provider}, falling back to LiteLLM proxy")
+
+        except Exception as e:
+            logger.warning(f"Direct provider routing failed: {str(e)}, falling back to LiteLLM proxy")
+
+    # Fall back to LiteLLM proxy (backward compatible)
     litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
 
     headers = {
@@ -460,7 +534,9 @@ async def make_llm_call(
             top_p=request.top_p,
             frequency_penalty=request.frequency_penalty,
             presence_penalty=request.presence_penalty,
-            stop=request.stop
+            stop=request.stop,
+            db=db,
+            organization_id=team_credits.organization_id
         )
 
         end_time = datetime.utcnow()
@@ -879,7 +955,9 @@ async def create_and_call_job(
             top_p=request.top_p,
             frequency_penalty=request.frequency_penalty,
             presence_penalty=request.presence_penalty,
-            stop=request.stop
+            stop=request.stop,
+            db=db,
+            organization_id=team_credits.organization_id
         )
 
         end_time = datetime.utcnow()
