@@ -15,6 +15,7 @@ RUN apt-get update && apt-get install -y \
 # Copy dependency files from project root
 COPY pyproject.toml ./
 COPY README.md ./
+COPY llm_pricing_current.json ./
 
 # Copy application code from project root
 COPY src/ ./src/
