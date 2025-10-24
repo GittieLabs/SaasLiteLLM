@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 import uuid
 import enum
 from datetime import datetime
-from utils.datetime_helpers import to_utc_isoformat
+from ..utils.datetime_helpers import to_utc_isoformat
 
 Base = declarative_base()
 
