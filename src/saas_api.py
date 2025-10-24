@@ -1242,16 +1242,14 @@ async def create_and_call_job_stream(
 
             # Log stream response received
             logger.info(f"[STREAM-RESPONSE] Received stream_response, type={type(stream_response).__name__}")
-            logger.info(f"[STREAM-RESPONSE] Status will be checked on context enter")
 
-            # Stream response is an httpx.Response object - iterate over it
+            # Stream response is an httpx.Response object - check status and iterate
             chunk_counter = 0
-            async with stream_response:
-                stream_response.raise_for_status()
-                logger.info(f"[STREAM-RESPONSE] Status code: {stream_response.status_code}, Headers: {dict(stream_response.headers)}")
+            stream_response.raise_for_status()
+            logger.info(f"[STREAM-RESPONSE] Status code: {stream_response.status_code}, Headers: {dict(stream_response.headers)}")
 
-                # Stream chunks to client
-                async for line in stream_response.aiter_lines():
+            # Stream chunks to client
+            async for line in stream_response.aiter_lines():
                     chunk_counter += 1
                     if line.startswith("data: "):
                         chunk_data = line[6:]  # Remove "data: " prefix
