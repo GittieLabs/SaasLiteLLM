@@ -30,7 +30,7 @@ class ProviderCredential(Base):
 
     credential_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     organization_id = Column(String, nullable=False, index=True)
-    provider = Column(SQLEnum(ProviderType), nullable=False)
+    provider = Column(SQLEnum(ProviderType, values_callable=lambda x: [e.value for e in x]), nullable=False)
 
     # Encrypted API key (will be encrypted at application layer)
     api_key = Column(Text, nullable=False)
