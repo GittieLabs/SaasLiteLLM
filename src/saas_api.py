@@ -193,7 +193,7 @@ class SingleCallJobResponse(BaseModel):
 async def call_litellm(
     model: str,
     messages: List[Dict[str, Any]],
-    virtual_key: str,
+    virtual_key: Optional[str],
     team_id: str,
     temperature: float = 0.7,
     max_tokens: Optional[int] = None,
@@ -488,12 +488,6 @@ async def make_llm_call(
             detail=f"Team '{job.team_id}' not found"
         )
 
-    if not team_credits.virtual_key:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Team '{job.team_id}' has no virtual key configured"
-        )
-
     # Update job status to in_progress if pending
     if job.status == JobStatus.PENDING:
         job.status = JobStatus.IN_PROGRESS
@@ -524,7 +518,7 @@ async def make_llm_call(
         litellm_response = await call_litellm(
             model=primary_model,
             messages=request.messages,
-            virtual_key=team_credits.virtual_key,
+            virtual_key=getattr(team_credits, 'virtual_key', None),
             team_id=job.team_id,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
@@ -669,10 +663,10 @@ async def make_llm_call_stream(
         TeamCredits.team_id == job.team_id
     ).first()
 
-    if not team_credits or not team_credits.virtual_key:
+    if not team_credits:
         raise HTTPException(
             status_code=404,
-            detail=f"Team '{job.team_id}' not found or has no virtual key"
+            detail=f"Team '{job.team_id}' not found"
         )
 
     # Update job status to in_progress if pending
@@ -700,7 +694,7 @@ async def make_llm_call_stream(
         db.commit()
 
     # Capture virtual_key and team_id before generator to avoid DetachedInstanceError
-    virtual_key_value = team_credits.virtual_key
+    virtual_key_value = getattr(team_credits, 'virtual_key', None)
     team_id_value = job.team_id
 
     # Create streaming generator
@@ -894,12 +888,6 @@ async def create_and_call_job(
             detail=f"Team '{request.team_id}' not found"
         )
 
-    if not team_credits.virtual_key:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Team '{request.team_id}' has no virtual key configured"
-        )
-
     # Step 1: Create job
     job = Job(
         team_id=request.team_id,
@@ -945,7 +933,7 @@ async def create_and_call_job(
         litellm_response = await call_litellm(
             model=primary_model,
             messages=request.messages,
-            virtual_key=team_credits.virtual_key,
+            virtual_key=getattr(team_credits, 'virtual_key', None),
             team_id=job.team_id,
             temperature=request.temperature,
             max_tokens=request.max_tokens,
@@ -1152,12 +1140,6 @@ async def create_and_call_job_stream(
             detail=f"Team '{request.team_id}' not found"
         )
 
-    if not team_credits.virtual_key:
-        raise HTTPException(
-            status_code=500,
-            detail=f"Team '{request.team_id}' has no virtual key configured"
-        )
-
     # Step 1: Create job
     job = Job(
         team_id=request.team_id,
@@ -1175,7 +1157,7 @@ async def create_and_call_job_stream(
     # Capture values before generator to avoid DetachedInstanceError
     job_id_value = job.job_id
     team_id_value = job.team_id
-    virtual_key_value = team_credits.virtual_key
+    virtual_key_value = getattr(team_credits, 'virtual_key', None)
     budget_mode = team_credits.budget_mode
     credits_per_dollar = team_credits.credits_per_dollar
     tokens_per_credit = team_credits.tokens_per_credit
