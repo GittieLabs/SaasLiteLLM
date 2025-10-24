@@ -11,7 +11,7 @@ Pricing data is loaded from llm_pricing_current.json at module import time.
 """
 from typing import Dict, Any, Optional
 from decimal import Decimal
-from utils.pricing_loader import load_pricing_from_json
+from .pricing_loader import load_pricing_from_json
 
 
 def calculate_token_costs(

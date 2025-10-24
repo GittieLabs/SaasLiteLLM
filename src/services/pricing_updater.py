@@ -27,7 +27,7 @@ from typing import Dict, List, Optional, Tuple
 from pathlib import Path
 import logging
 
-from utils.cost_calculator import MODEL_PRICING, get_provider_from_model
+from ..utils.cost_calculator import MODEL_PRICING, get_provider_from_model
 
 logger = logging.getLogger(__name__)
 

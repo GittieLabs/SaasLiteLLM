@@ -18,8 +18,8 @@ from typing import Dict, List, Optional, Tuple
 import httpx
 from bs4 import BeautifulSoup
 
-from services.pricing_updater import get_pricing_updater
-from utils.cost_calculator import MODEL_PRICING
+from .pricing_updater import get_pricing_updater
+from ..utils.cost_calculator import MODEL_PRICING
 
 logger = logging.getLogger(__name__)
 

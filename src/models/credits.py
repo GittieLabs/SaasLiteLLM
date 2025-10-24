@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from datetime import datetime
 import uuid
 from .job_tracking import Base
-from utils.datetime_helpers import to_utc_isoformat
+from ..utils.datetime_helpers import to_utc_isoformat
 
 
 class TeamCredits(Base):
