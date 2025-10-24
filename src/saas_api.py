@@ -1158,6 +1158,7 @@ async def create_and_call_job_stream(
     job_id_value = job.job_id
     team_id_value = job.team_id
     virtual_key_value = getattr(team_credits, 'virtual_key', None)
+    organization_id_value = team_credits.organization_id
     budget_mode = team_credits.budget_mode
     credits_per_dollar = team_credits.credits_per_dollar
     tokens_per_credit = team_credits.tokens_per_credit
@@ -1187,39 +1188,6 @@ async def create_and_call_job_stream(
         # Send immediate keepalive to establish connection
         yield ": keepalive\n\n"
 
-        litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
-
-        headers = {
-            "Authorization": f"Bearer {virtual_key_value}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "model": primary_model,
-            "messages": request.messages,
-            "temperature": request.temperature,
-            "stream": True,
-            "user": team_id_value,
-        }
-
-        # Add optional parameters
-        if request.max_tokens:
-            payload["max_tokens"] = request.max_tokens
-        if request.response_format:
-            payload["response_format"] = request.response_format
-        if request.tools:
-            payload["tools"] = request.tools
-        if request.tool_choice:
-            payload["tool_choice"] = request.tool_choice
-        if request.top_p:
-            payload["top_p"] = request.top_p
-        if request.frequency_penalty:
-            payload["frequency_penalty"] = request.frequency_penalty
-        if request.presence_penalty:
-            payload["presence_penalty"] = request.presence_penalty
-        if request.stop:
-            payload["stop"] = request.stop
-
         # Track accumulated response for database storage
         accumulated_content = ""
         accumulated_tokens = {"prompt": 0, "completion": 0, "total": 0}
@@ -1228,46 +1196,66 @@ async def create_and_call_job_stream(
         llm_call_successful = False
 
         try:
-            async with httpx.AsyncClient() as client:
-                async with client.stream('POST', litellm_url, json=payload, headers=headers, timeout=120.0) as response:
-                    response.raise_for_status()
+            # Use call_litellm with streaming - this routes through direct provider service
+            stream_response = await call_litellm(
+                model=primary_model,
+                messages=request.messages,
+                virtual_key=virtual_key_value,
+                team_id=team_id_value,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                response_format=request.response_format,
+                tools=request.tools,
+                tool_choice=request.tool_choice,
+                top_p=request.top_p,
+                frequency_penalty=request.frequency_penalty,
+                presence_penalty=request.presence_penalty,
+                stop=request.stop,
+                stream=True,
+                db=db,
+                organization_id=organization_id_value
+            )
 
-                    # Stream chunks to client
-                    async for line in response.aiter_lines():
-                        if line.startswith("data: "):
-                            chunk_data = line[6:]  # Remove "data: " prefix
+            # Stream response is an httpx.Response object - iterate over it
+            async with stream_response:
+                stream_response.raise_for_status()
 
-                            if chunk_data == "[DONE]":
-                                yield f"data: [DONE]\n\n"
-                                break
+                # Stream chunks to client
+                async for line in stream_response.aiter_lines():
+                    if line.startswith("data: "):
+                        chunk_data = line[6:]  # Remove "data: " prefix
 
-                            try:
-                                import json
-                                chunk_json = json.loads(chunk_data)
+                        if chunk_data == "[DONE]":
+                            yield f"data: [DONE]\n\n"
+                            break
 
-                                # Extract request ID from first chunk
-                                if litellm_request_id is None:
-                                    litellm_request_id = chunk_json.get("id")
+                        try:
+                            import json
+                            chunk_json = json.loads(chunk_data)
 
-                                # Accumulate content
-                                if "choices" in chunk_json:
-                                    for choice in chunk_json["choices"]:
-                                        if "delta" in choice and "content" in choice["delta"]:
-                                            accumulated_content += choice["delta"]["content"]
+                            # Extract request ID from first chunk
+                            if litellm_request_id is None:
+                                litellm_request_id = chunk_json.get("id")
 
-                                # Extract usage if present (usually in last chunk)
-                                if "usage" in chunk_json:
-                                    accumulated_tokens = {
-                                        "prompt": chunk_json["usage"].get("prompt_tokens", 0),
-                                        "completion": chunk_json["usage"].get("completion_tokens", 0),
-                                        "total": chunk_json["usage"].get("total_tokens", 0)
-                                    }
+                            # Accumulate content
+                            if "choices" in chunk_json:
+                                for choice in chunk_json["choices"]:
+                                    if "delta" in choice and "content" in choice["delta"]:
+                                        accumulated_content += choice["delta"]["content"]
 
-                                # Stream to client immediately
-                                yield f"data: {chunk_data}\n\n"
+                            # Extract usage if present (usually in last chunk)
+                            if "usage" in chunk_json:
+                                accumulated_tokens = {
+                                    "prompt": chunk_json["usage"].get("prompt_tokens", 0),
+                                    "completion": chunk_json["usage"].get("completion_tokens", 0),
+                                    "total": chunk_json["usage"].get("total_tokens", 0)
+                                }
 
-                            except json.JSONDecodeError:
-                                continue
+                            # Stream to client immediately
+                            yield f"data: {chunk_data}\n\n"
+
+                        except json.JSONDecodeError:
+                            continue
 
             # After streaming completes, store in database
             end_time = datetime.utcnow()
