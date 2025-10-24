@@ -1,0 +1,46 @@
+{
+  "timestamp": "2025-10-23T15:41:49.441872+00:00",
+  "validation": {
+    "timestamp": "2025-10-23T15:41:47.547206+00:00",
+    "models_validated": 66,
+    "warnings": [],
+    "errors": []
+  },
+  "stale_models_count": 66,
+  "scrape_results": {
+    "timestamp": "2025-10-23T15:41:47.547391+00:00",
+    "providers": {
+      "openai": {
+        "status": "error",
+        "error": "Client error '403 Forbidden' for url 'https://openai.com/api/pricing/'\nFor more information check: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status/403"
+      },
+      "anthropic": {
+        "status": "success",
+        "models_found": 0,
+        "data": []
+      },
+      "gemini": {
+        "status": "success",
+        "models_found": 0,
+        "data": []
+      },
+      "fireworks": {
+        "status": "success",
+        "models_found": 0,
+        "data": []
+      }
+    },
+    "summary": {
+      "total_scraped": 0,
+      "successful": 3,
+      "failed": 1,
+      "updates": []
+    }
+  },
+  "report_summary": {
+    "total_changes": 0,
+    "increases": 0,
+    "decreases": 0,
+    "new_models": 0
+  }
+}
