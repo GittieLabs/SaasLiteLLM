@@ -225,11 +225,27 @@ async def call_litellm(
     if db is not None and organization_id is not None:
         try:
             from .services.direct_provider_service import get_direct_provider_service
+            from .models.model_aliases import ModelAlias
 
             direct_service = get_direct_provider_service()
 
-            # Detect provider from model name
-            provider = direct_service.detect_provider_from_model(model)
+            # Check if model is an alias and resolve it
+            actual_model = model
+            provider = None
+
+            model_alias_record = db.query(ModelAlias).filter(
+                ModelAlias.model_alias == model,
+                ModelAlias.status == "active"
+            ).first()
+
+            if model_alias_record:
+                # Use the actual model and provider from the alias
+                actual_model = model_alias_record.actual_model
+                provider = model_alias_record.provider
+                logger.info(f"Resolved model alias '{model}' -> '{actual_model}' (provider: {provider})")
+            else:
+                # Not an alias, detect provider from model name pattern
+                provider = direct_service.detect_provider_from_model(model)
 
             # Try to get provider credentials
             credential_result = await direct_service.get_provider_credential(
@@ -240,7 +256,7 @@ async def call_litellm(
 
             if credential_result:
                 api_key, provider_name = credential_result
-                logger.info(f"Routing to direct {provider_name} API for model {model}")
+                logger.info(f"Routing to direct {provider_name} API for model {actual_model}")
 
                 # Route to direct provider
                 if stream:
@@ -248,7 +264,7 @@ async def call_litellm(
                     return await direct_service.chat_completion_stream(
                         provider=provider_name,
                         api_key=api_key,
-                        model=model,
+                        model=actual_model,
                         messages=messages,
                         temperature=temperature,
                         max_tokens=max_tokens,
@@ -265,7 +281,7 @@ async def call_litellm(
                     return await direct_service.chat_completion(
                         provider=provider_name,
                         api_key=api_key,
-                        model=model,
+                        model=actual_model,
                         messages=messages,
                         temperature=temperature,
                         max_tokens=max_tokens,
