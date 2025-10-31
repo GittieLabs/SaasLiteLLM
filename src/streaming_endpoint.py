@@ -127,7 +127,7 @@ async def make_llm_call_stream(
         accumulated_content = ""
         accumulated_tool_calls = []
         accumulated_tokens = {"prompt": 0, "completion": 0, "total": 0}
-        litellm_request_id = None
+        litellm_request_id = str(uuid.uuid4())  # Generate unique ID for this request
         start_time = datetime.utcnow()
         has_error = False
         error_message = None
@@ -148,10 +148,6 @@ async def make_llm_call_stream(
 
                             try:
                                 chunk_json = json.loads(chunk_data)
-
-                                # Extract request ID from first chunk
-                                if litellm_request_id is None:
-                                    litellm_request_id = chunk_json.get("id")
 
                                 # Accumulate content
                                 if "choices" in chunk_json:
