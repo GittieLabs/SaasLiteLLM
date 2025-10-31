@@ -143,11 +143,15 @@ nav:
 
   - Admin Dashboard:
       - Overview: admin-dashboard/overview.md
+      - Authentication: admin-dashboard/authentication.md
       - Organizations: admin-dashboard/organizations.md
       - Teams: admin-dashboard/teams.md
+      - Provider Credentials: admin-dashboard/provider-credentials.md
       - Model Access Groups: admin-dashboard/model-access-groups.md
       - Model Aliases: admin-dashboard/model-aliases.md
+      - Model Pricing: admin-dashboard/pricing.md
       - Credits: admin-dashboard/credits.md
+      - Cost Transparency: admin-dashboard/cost-transparency.md
       - Suspend & Pause: admin-dashboard/suspend-pause.md
       - Monitoring: admin-dashboard/monitoring.md
 
@@ -178,6 +182,8 @@ nav:
       - LLM Calls: api-reference/llm-calls.md
       - Teams: api-reference/teams.md
       - Organizations: api-reference/organizations.md
+      - Model Aliases: api-reference/models.md
+      - Provider Credentials: api-reference/provider-credentials.md
       - Full API Docs (ReDoc): api-reference/redoc-link.md
 
   - Deployment:

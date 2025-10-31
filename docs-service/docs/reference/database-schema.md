@@ -86,7 +86,12 @@ Tracks credit allocation and usage for teams. Credits are the billing unit where
 | `refill_amount` | INTEGER | NULLABLE | Amount to refill when auto_refill enabled |
 | `refill_period` | VARCHAR(50) | NULLABLE | Refill frequency: 'daily', 'weekly', 'monthly' |
 | `last_refill_at` | TIMESTAMP | NULLABLE | Last automatic refill timestamp |
-| `virtual_key` | VARCHAR(500) | NULLABLE | LiteLLM virtual API key for this team |
+| `virtual_key` | VARCHAR(500) | NULLABLE | Virtual API key for team authentication |
+| `cost_markup_percentage` | NUMERIC(5,2) | DEFAULT 0.0 | Markup % for cost transparency (NEW v1.0.0) |
+| `budget_mode` | VARCHAR(50) | DEFAULT 'job_based' | Budget mode: job_based, consumption_usd, consumption_tokens (NEW v1.0.0) |
+| `credits_per_dollar` | NUMERIC(10,2) | DEFAULT 100.0 | Credits per dollar conversion (NEW v1.0.0) |
+| `tokens_per_credit` | INTEGER | DEFAULT 1000 | Tokens per credit conversion (NEW v1.0.0) |
+| `status` | VARCHAR(50) | DEFAULT 'active' | Team status: active, suspended, paused (NEW v1.0.0) |
 | `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Creation timestamp |
 | `updated_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Last update timestamp |
 
@@ -280,12 +285,18 @@ Individual LLM API calls within a job. Tracks costs, performance, and usage metr
 |--------|------|-------------|-------------|
 | `call_id` | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique call identifier |
 | `job_id` | UUID | FOREIGN KEY → jobs ON DELETE CASCADE, INDEX | Parent job |
-| `litellm_request_id` | VARCHAR(255) | UNIQUE, NULLABLE | LiteLLM's internal request ID |
+| `litellm_request_id` | VARCHAR(255) | UNIQUE, NULLABLE | Provider's internal request ID |
 | `model_used` | VARCHAR(100) | NULLABLE | Actual model that handled the request |
 | `prompt_tokens` | INTEGER | DEFAULT 0 | Input tokens consumed |
 | `completion_tokens` | INTEGER | DEFAULT 0 | Output tokens generated |
 | `total_tokens` | INTEGER | DEFAULT 0 | Sum of prompt + completion tokens |
-| `cost_usd` | NUMERIC(10,6) | DEFAULT 0.0 | Actual USD cost from LLM provider |
+| `cost_usd` | NUMERIC(10,6) | DEFAULT 0.0 | Legacy total cost field |
+| `input_cost_usd` | NUMERIC(12,8) | NULLABLE | Input token cost (NEW v1.0.0) |
+| `output_cost_usd` | NUMERIC(12,8) | NULLABLE | Output token cost (NEW v1.0.0) |
+| `provider_cost_usd` | NUMERIC(12,8) | NULLABLE | Actual provider cost (NEW v1.0.0) |
+| `client_cost_usd` | NUMERIC(12,8) | NULLABLE | Cost charged to client with markup (NEW v1.0.0) |
+| `model_pricing_input` | NUMERIC(10,6) | NULLABLE | Input price ($/M tokens) at call time (NEW v1.0.0) |
+| `model_pricing_output` | NUMERIC(10,6) | NULLABLE | Output price ($/M tokens) at call time (NEW v1.0.0) |
 | `latency_ms` | INTEGER | NULLABLE | Request latency in milliseconds |
 | `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW(), INDEX | Call timestamp |
 | `purpose` | VARCHAR(200) | NULLABLE | Description of call purpose |
@@ -546,6 +557,56 @@ VALUES ('team-alpha', 'group-uuid-123');
 ---
 
 ## Additional Tables
+
+### provider_credentials
+
+**NEW in v1.0.0** - Encrypted storage of LLM provider API keys at the organization level.
+
+**Columns:**
+
+| Column | Type | Constraints | Description |
+|--------|------|-------------|-------------|
+| `credential_id` | UUID | PRIMARY KEY, DEFAULT gen_random_uuid() | Unique credential identifier |
+| `organization_id` | VARCHAR(255) | FOREIGN KEY → organizations, NOT NULL, INDEX | Organization that owns credential |
+| `provider` | VARCHAR(50) | NOT NULL, INDEX | Provider name: openai, anthropic, gemini, fireworks |
+| `credential_name` | VARCHAR(200) | NOT NULL | Descriptive name for the credential |
+| `api_key` | TEXT | NOT NULL | Encrypted API key (Fernet encryption) |
+| `api_base` | VARCHAR(500) | NULLABLE | Optional custom API base URL |
+| `is_active` | BOOLEAN | DEFAULT TRUE | Active status for credential |
+| `created_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Creation timestamp |
+| `updated_at` | TIMESTAMP | NOT NULL, DEFAULT NOW() | Last update timestamp |
+
+**Indexes:**
+
+- `idx_provider_credentials_org` on `(organization_id)`
+- `idx_provider_credentials_provider` on `(provider)`
+- `idx_provider_credentials_active` on `(is_active)`
+
+**Unique Constraints:**
+
+- `uq_provider_credentials_org_name` on `(organization_id, credential_name)` - Unique credential names per organization
+
+**Security:**
+
+- API keys are encrypted at rest using Fernet symmetric encryption
+- Encryption key stored in `MASTER_KEY` environment variable
+- Keys decrypted only when making provider API calls
+- Never exposed in API responses
+
+**Example:**
+
+```sql
+INSERT INTO provider_credentials (
+    organization_id, provider, credential_name, api_key
+) VALUES (
+    'org-acme',
+    'openai',
+    'Production OpenAI Key',
+    'encrypted:gAAAAABl...' -- Encrypted with Fernet
+);
+```
+
+---
 
 ### webhook_registrations
 
