@@ -574,7 +574,7 @@ async def make_llm_call(
         # Store LLM call record with complete cost tracking
         llm_call = LLMCall(
             job_id=job.job_id,
-            litellm_request_id=litellm_response.get("id"),
+            litellm_request_id=str(uuid.uuid4()),  # Generate unique ID since provider IDs may not be unique
             model_used=primary_model,
             model_group_used=request.model,
             resolved_model=resolved_model,
@@ -752,7 +752,7 @@ async def make_llm_call_stream(
         # Track accumulated response for database storage
         accumulated_content = ""
         accumulated_tokens = {"prompt": 0, "completion": 0, "total": 0}
-        litellm_request_id = None
+        litellm_request_id = str(uuid.uuid4())  # Generate unique ID for this request
         start_time = datetime.utcnow()
 
         try:
@@ -772,10 +772,6 @@ async def make_llm_call_stream(
                             try:
                                 import json
                                 chunk_json = json.loads(chunk_data)
-
-                                # Extract request ID from first chunk
-                                if litellm_request_id is None:
-                                    litellm_request_id = chunk_json.get("id")
 
                                 # Accumulate content
                                 if "choices" in chunk_json:
@@ -997,7 +993,7 @@ async def create_and_call_job(
         # Store LLM call record
         llm_call = LLMCall(
             job_id=job.job_id,
-            litellm_request_id=litellm_response.get("id"),
+            litellm_request_id=str(uuid.uuid4()),  # Generate unique ID since provider IDs may not be unique
             model_used=primary_model,
             model_group_used=request.model,
             resolved_model=litellm_response.get("model", primary_model),
@@ -1211,7 +1207,7 @@ async def create_and_call_job_stream(
         # Track accumulated response for database storage
         accumulated_content = ""
         accumulated_tokens = {"prompt": 0, "completion": 0, "total": 0}
-        litellm_request_id = None
+        litellm_request_id = str(uuid.uuid4())  # Generate unique ID for this request
         start_time = datetime.utcnow()
         llm_call_successful = False
 
@@ -1261,11 +1257,6 @@ async def create_and_call_job_stream(
                         try:
                             import json
                             chunk_json = json.loads(chunk_data)
-
-                            # Extract request ID from first chunk
-                            if litellm_request_id is None:
-                                litellm_request_id = chunk_json.get("id")
-                                logger.info(f"[STREAM-CHUNK-1] First chunk, request_id={litellm_request_id}")
 
                             # Accumulate content
                             has_content = False
