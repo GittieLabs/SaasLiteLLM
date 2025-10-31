@@ -148,6 +148,7 @@ export default function ModelsPage() {
       pricing_output: model.pricing_output?.toString() || '',
       credential_name: '',
       access_groups: model.access_groups || [],
+      organization_id: formData.organization_id, // Keep current org selection
     });
     setEditingModel(model.model_alias);
     setShowCreateForm(true);
