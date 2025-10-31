@@ -9,7 +9,6 @@ from sqlalchemy import func
 from decimal import Decimal
 from ..models.model_aliases import ModelAlias, ModelAliasAccessGroup, ModelAccessGroup
 from ..models.job_tracking import get_db
-from ..services.litellm_service import get_litellm_service, LiteLLMServiceError
 import logging
 
 logger = logging.getLogger(__name__)
