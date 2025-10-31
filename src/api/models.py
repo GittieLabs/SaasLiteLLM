@@ -66,7 +66,7 @@ async def create_model(
     db: Session = Depends(get_db)
 ):
     """
-    Create a new model alias in both SaaS API and LiteLLM
+    Create a new model alias - no longer uses LiteLLM proxy, stores directly in our database
     """
     # Check if alias already exists
     existing = db.query(ModelAlias).filter(
@@ -91,55 +91,13 @@ async def create_model(
                     detail=f"Model access group '{group_name}' not found"
                 )
 
-    # Create model alias in LiteLLM
-    litellm_service = get_litellm_service()
-
-    try:
-        # Build pricing for LiteLLM
-        pricing = None
-        if request.pricing_input is not None or request.pricing_output is not None:
-            pricing = {
-                "input": request.pricing_input,
-                "output": request.pricing_output
-            }
-
-        # Create in LiteLLM
-        litellm_response = await litellm_service.create_model_alias(
-            model_alias=request.model_alias,
-            provider=request.provider,
-            actual_model=request.actual_model,
-            access_groups=request.access_groups,
-            credential_name=request.credential_name,
-            api_key=request.api_key,
-            api_base=request.api_base,
-            pricing=pricing,
-            metadata={
-                "display_name": request.display_name,
-                "description": request.description
-            }
-        )
-
-        # Extract model ID from LiteLLM response
-        litellm_model_id = None
-        if isinstance(litellm_response, dict):
-            litellm_model_id = litellm_response.get("model_id") or litellm_response.get("id")
-
-        logger.info(f"Created model alias '{request.model_alias}' in LiteLLM with ID: {litellm_model_id}")
-
-    except LiteLLMServiceError as e:
-        logger.error(f"Failed to create model alias in LiteLLM: {str(e)}")
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to create model in LiteLLM: {str(e)}"
-        )
-
-    # Create model alias in SaaS database
+    # Create model alias in SaaS database (direct provider integration, no LiteLLM proxy)
     model_alias = ModelAlias(
         model_alias=request.model_alias,
         display_name=request.display_name,
         provider=request.provider,
         actual_model=request.actual_model,
-        litellm_model_id=litellm_model_id,
+        litellm_model_id=None,  # No longer needed with direct provider integration
         description=request.description,
         pricing_input=Decimal(str(request.pricing_input)) if request.pricing_input else None,
         pricing_output=Decimal(str(request.pricing_output)) if request.pricing_output else None,
@@ -165,6 +123,8 @@ async def create_model(
 
     db.commit()
     db.refresh(model_alias)
+
+    logger.info(f"Created model alias '{request.model_alias}' for provider '{request.provider}' with model '{request.actual_model}'")
 
     return ModelResponse(
         model_alias=model_alias.model_alias,
@@ -358,34 +318,10 @@ async def update_model(
                 )
                 db.add(assignment)
 
-    # Update in LiteLLM if model changed
-    if model.litellm_model_id and (request.actual_model or request.provider):
-        litellm_service = get_litellm_service()
-        try:
-            updates = {}
-            if request.actual_model and request.provider:
-                updates["litellm_params"] = {
-                    "model": f"{request.provider}/{request.actual_model}"
-                }
-            elif request.actual_model:
-                updates["litellm_params"] = {
-                    "model": f"{model.provider}/{request.actual_model}"
-                }
-            elif request.provider:
-                updates["litellm_params"] = {
-                    "model": f"{request.provider}/{model.actual_model}"
-                }
-
-            if updates:
-                await litellm_service.update_model_alias(model.litellm_model_id, updates)
-                logger.info(f"Updated model alias '{alias}' in LiteLLM")
-
-        except LiteLLMServiceError as e:
-            logger.warning(f"Failed to update model in LiteLLM: {str(e)}")
-            # Continue anyway, SaaS DB will be updated
-
     db.commit()
     db.refresh(model)
+
+    logger.info(f"Updated model alias '{alias}'")
 
     # Get updated access groups
     access_group_names = [
@@ -428,18 +364,10 @@ async def delete_model(
             detail=f"Model alias '{alias}' not found"
         )
 
-    # Delete from LiteLLM if model ID exists
-    if model.litellm_model_id:
-        litellm_service = get_litellm_service()
-        try:
-            await litellm_service.delete_model_alias(model.litellm_model_id)
-            logger.info(f"Deleted model alias '{alias}' from LiteLLM")
-        except LiteLLMServiceError as e:
-            logger.warning(f"Failed to delete model from LiteLLM: {str(e)}")
-            # Continue anyway
-
     # Delete from SaaS database (cascades to assignments)
     db.delete(model)
     db.commit()
+
+    logger.info(f"Deleted model alias '{alias}'")
 
     return {"message": f"Model alias '{alias}' deleted successfully"}

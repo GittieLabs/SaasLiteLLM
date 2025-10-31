@@ -10,12 +10,23 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Plus, Trash2, Edit, X } from 'lucide-react';
-import { ModelAlias, ModelAccessGroup } from '@/types';
+import { ModelAlias, ModelAccessGroup, Organization } from '@/types';
 import { api } from '@/lib/api-client';
+import { PROVIDERS, getModelsForProvider, getModel } from '@/lib/provider-models';
+
+interface ProviderCredential {
+  credential_id: string;
+  organization_id: string;
+  provider: string;
+  credential_name: string;
+  is_active: boolean;
+}
 
 export default function ModelsPage() {
   const [models, setModels] = useState<ModelAlias[]>([]);
   const [accessGroups, setAccessGroups] = useState<ModelAccessGroup[]>([]);
+  const [organizations, setOrganizations] = useState<Organization[]>([]);
+  const [credentials, setCredentials] = useState<ProviderCredential[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [editingModel, setEditingModel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -29,6 +40,7 @@ export default function ModelsPage() {
     pricing_output: '',
     credential_name: '',
     access_groups: [] as string[],
+    organization_id: '',
   });
 
   useEffect(() => {
@@ -38,19 +50,66 @@ export default function ModelsPage() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [modelsData, groupsData] = await Promise.all([
+      const [modelsData, groupsData, orgsData] = await Promise.all([
         api.getModelAliases(),
         api.getModelAccessGroups(),
+        api.getOrganizations(),
       ]);
       setModels(modelsData);
       setAccessGroups(groupsData);
+      setOrganizations(orgsData);
+
+      // Load credentials for first org if available
+      if (orgsData.length > 0 && !formData.organization_id) {
+        const firstOrg = orgsData[0].organization_id;
+        setFormData(prev => ({ ...prev, organization_id: firstOrg }));
+        await loadCredentials(firstOrg);
+      }
     } catch (error) {
       console.error('Failed to load data:', error);
       setModels([]);
       setAccessGroups([]);
+      setOrganizations([]);
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadCredentials = async (organizationId: string) => {
+    try {
+      const credsData = await api.getProviderCredentials(organizationId);
+      setCredentials(credsData);
+    } catch (error) {
+      console.error('Failed to load credentials:', error);
+      setCredentials([]);
+    }
+  };
+
+  const handleProviderChange = (provider: string) => {
+    setFormData({
+      ...formData,
+      provider,
+      actual_model: '', // Reset model when provider changes
+      pricing_input: '',
+      pricing_output: '',
+    });
+  };
+
+  const handleModelChange = (modelValue: string) => {
+    const modelInfo = getModel(formData.provider, modelValue);
+    setFormData({
+      ...formData,
+      actual_model: modelValue,
+      display_name: modelInfo?.label || modelValue,
+      pricing_input: modelInfo?.defaultInputPrice?.toString() || '',
+      pricing_output: modelInfo?.defaultOutputPrice?.toString() || '',
+      description: modelInfo?.description || '',
+    });
+  };
+
+  const handleOrganizationChange = async (organizationId: string) => {
+    setFormData({ ...formData, organization_id: organizationId });
+    await loadCredentials(organizationId);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -95,7 +154,7 @@ export default function ModelsPage() {
   };
 
   const handleDelete = async (alias: string) => {
-    if (!confirm(`Are you sure you want to delete model alias "${alias}"? This will also remove it from LiteLLM.`)) {
+    if (!confirm(`Are you sure you want to delete model alias "${alias}"? This action cannot be undone.`)) {
       return;
     }
 
@@ -133,6 +192,7 @@ export default function ModelsPage() {
       pricing_output: '',
       credential_name: '',
       access_groups: [],
+      organization_id: organizations.length > 0 ? organizations[0].organization_id : '',
     });
   };
 
@@ -178,7 +238,7 @@ export default function ModelsPage() {
                   <CardDescription>
                     {editingModel
                       ? 'Update the model alias configuration'
-                      : 'Create a user-facing alias that maps to an actual LLM model. Credentials are managed in LiteLLM.'
+                      : 'Create a user-facing alias that maps to an actual LLM model. Select a provider, choose from available models, and pricing will be auto-populated.'
                     }
                   </CardDescription>
                 </CardHeader>
@@ -216,52 +276,88 @@ export default function ModelsPage() {
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="provider">Provider *</Label>
+                        <Label htmlFor="organization_id">Organization *</Label>
                         <select
-                          id="provider"
-                          value={formData.provider}
-                          onChange={(e) => setFormData({ ...formData, provider: e.target.value })}
-                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                          id="organization_id"
+                          value={formData.organization_id}
+                          onChange={(e) => handleOrganizationChange(e.target.value)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                           required
                         >
-                          <option value="openai">OpenAI</option>
-                          <option value="anthropic">Anthropic</option>
-                          <option value="google">Google</option>
-                          <option value="azure">Azure</option>
-                          <option value="aws">AWS Bedrock</option>
-                          <option value="cohere">Cohere</option>
-                          <option value="together_ai">Together AI</option>
+                          <option value="">Select organization...</option>
+                          {organizations.map((org) => (
+                            <option key={org.organization_id} value={org.organization_id}>
+                              {org.organization_id} ({org.name})
+                            </option>
+                          ))}
                         </select>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="actual_model">Actual Model *</Label>
-                        <Input
-                          id="actual_model"
-                          placeholder="e.g., gpt-4o, gpt-4o-mini"
-                          value={formData.actual_model}
-                          onChange={(e) =>
-                            setFormData({ ...formData, actual_model: e.target.value })
-                          }
-                          required
-                        />
                         <p className="text-xs text-muted-foreground">
-                          Real model name from provider
+                          Select organization to see available credentials
                         </p>
                       </div>
 
                       <div className="space-y-2">
-                        <Label htmlFor="credential_name">Credential Name (Optional)</Label>
-                        <Input
+                        <Label htmlFor="provider">Provider *</Label>
+                        <select
+                          id="provider"
+                          value={formData.provider}
+                          onChange={(e) => handleProviderChange(e.target.value)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          required
+                        >
+                          {PROVIDERS.map((provider) => (
+                            <option key={provider.value} value={provider.value}>
+                              {provider.label} - {provider.description}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="actual_model">Select Model *</Label>
+                        <select
+                          id="actual_model"
+                          value={formData.actual_model}
+                          onChange={(e) => handleModelChange(e.target.value)}
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          required
+                        >
+                          <option value="">Choose a model...</option>
+                          {getModelsForProvider(formData.provider).map((model) => (
+                            <option key={model.value} value={model.value}>
+                              {model.label} - {model.description}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="text-xs text-muted-foreground">
+                          Pricing will be auto-populated based on provider defaults
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="credential_name">Provider Credential</Label>
+                        <select
                           id="credential_name"
-                          placeholder="e.g., openai_prod_key"
                           value={formData.credential_name}
                           onChange={(e) =>
                             setFormData({ ...formData, credential_name: e.target.value })
                           }
-                        />
+                          className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <option value="">Use environment variables</option>
+                          {credentials
+                            .filter(c => c.provider === formData.provider && c.is_active)
+                            .map((cred) => (
+                              <option key={cred.credential_id} value={cred.credential_name}>
+                                {cred.credential_name} (Active)
+                              </option>
+                            ))}
+                        </select>
                         <p className="text-xs text-muted-foreground">
-                          Reference a credential stored in LiteLLM. Leave empty to use environment variables.
+                          {credentials.filter(c => c.provider === formData.provider && c.is_active).length === 0
+                            ? `No active ${formData.provider} credentials found. Add credentials in Provider Credentials page.`
+                            : 'Select a credential or leave empty to use environment variables'
+                          }
                         </p>
                       </div>
 

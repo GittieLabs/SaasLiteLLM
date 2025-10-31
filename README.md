@@ -86,9 +86,9 @@ python scripts/start_saas_api.py
 ```
 
 **Services:**
-- **LiteLLM Backend**: http://localhost:8002 (internal, admin only)
 - **SaaS API**: http://localhost:8003 (expose this to your teams)
 - **API Documentation**: http://localhost:8003/docs
+- **Admin Panel**: http://localhost:3000 (admin dashboard)
 
 ## Documentation
 
@@ -136,9 +136,7 @@ docker compose down -v
 
 - **SaaS API**: http://localhost:8003 (for your teams)
 - **SaaS API Docs**: http://localhost:8003/docs
-- **LiteLLM Server**: http://localhost:8002 (internal only)
-- **LiteLLM Admin UI**: http://localhost:8002/ui
-- **LiteLLM API Docs**: http://localhost:8002/docs
+- **Admin Panel**: http://localhost:3000 (admin dashboard)
 - **pgAdmin**: http://localhost:5050 (admin@litellm.local/admin)
 
 ## Job-Based API Usage (SaaS Pattern)
@@ -211,32 +209,20 @@ Response:
 }
 ```
 
-### Direct LiteLLM API (Legacy/Admin Only)
-
-For direct access to LiteLLM (admin only):
-
-```bash
-# Admin UI
-http://localhost:8002/ui
-
-# Generate team virtual key
-curl -X POST http://localhost:8002/key/generate \
-  -H "Authorization: Bearer sk-local-dev-master-key-change-me" \
-  -d '{"team_id": "team_dev", "models": ["gpt-3.5-turbo"]}'
-```
-
 ## Configuration
 
-### Adding New Models
-Edit `src/config/litellm_config.yaml`:
+### Adding New Models and Provider Credentials
 
-```yaml
-model_list:
-  - model_name: new-model
-    litellm_params:
-      model: provider/model-name
-      api_key: os.environ/PROVIDER_API_KEY
-```
+Models and provider credentials are managed through the Admin Panel:
+
+1. **Navigate to Provider Credentials** (http://localhost:3000/provider-credentials)
+   - Add API keys for OpenAI, Anthropic, Gemini, or Fireworks
+   - Credentials are encrypted before storage
+
+2. **Navigate to Model Aliases** (http://localhost:3000/models)
+   - Create model aliases with custom pricing
+   - Set input/output costs per million tokens
+   - Assign models to access groups for team-level permissions
 
 ### Environment Files
 
@@ -303,31 +289,42 @@ docker compose down -v
 │   - /api/jobs/{id}/llm-call     │
 │   - /api/jobs/{id}/complete     │
 │   - /api/teams/{id}/usage       │
+│   - Model routing & pricing     │
+│   - Direct provider integration │
 └─────────────────────────────────┘
               ↓
 ┌─────────────────────────────────┐
-│   LiteLLM Proxy (Port 8002)     │  ← Internal only
-│   - Virtual API keys            │
-│   - Model routing               │
-│   - Redis caching               │
-│   - Rate limiting               │
+│   Admin Panel (Port 3000)       │  ← Management UI
+│   - Provider credentials        │
+│   - Model pricing overview      │
+│   - Team & org management       │
+│   - Usage analytics             │
 └─────────────────────────────────┘
               ↓
 ┌─────────────────────────────────┐
 │   PostgreSQL Database           │
-│   - jobs                        │
-│   - llm_calls                   │
+│   - jobs, llm_calls             │
+│   - teams, organizations        │
+│   - model_aliases               │
+│   - provider_credentials        │
 │   - job_cost_summaries          │
-│   - team_usage_summaries        │
+└─────────────────────────────────┘
+              ↓
+┌─────────────────────────────────┐
+│   LLM Provider APIs             │
+│   OpenAI │ Anthropic │ Gemini   │
+│   Fireworks │ (Direct calls)    │
 └─────────────────────────────────┘
 ```
 
 **Why This Architecture?**
 
-1. **Hidden Complexity** - Teams interact with your SaaS API, not LiteLLM
-2. **Job-Based Costs** - Track costs for business operations, not individual API calls
-3. **Flexible Pricing** - Charge what you want, track actual costs internally
-4. **Multi-Tenant** - Isolated teams with their own budgets and limits
+1. **Direct Provider Integration** - No proxy layer, lower latency, full control
+2. **Hidden Complexity** - Teams interact with your SaaS API, not provider APIs
+3. **Job-Based Costs** - Track costs for business operations, not individual API calls
+4. **Flexible Pricing** - Charge what you want, track actual costs internally
+5. **Multi-Tenant** - Isolated teams with their own budgets and limits
+6. **Cost Transparency** - Real provider costs vs customer pricing with detailed margins
 
 ## Project Structure
 

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Building2, Users, Layers, LayoutDashboard, LogOut, Box, Shield, Activity } from 'lucide-react';
+import { Building2, Users, Layers, LayoutDashboard, LogOut, Box, Shield, Activity, Key, DollarSign } from 'lucide-react';
 import { logout } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,8 @@ const navigation = [
   { name: 'Teams', href: '/teams', icon: Users },
   { name: 'Model Aliases', href: '/models', icon: Box },
   { name: 'Access Groups', href: '/model-access-groups', icon: Shield },
+  { name: 'Provider Credentials', href: '/provider-credentials', icon: Key },
+  { name: 'Model Pricing', href: '/pricing', icon: DollarSign },
 ];
 
 export default function Sidebar() {

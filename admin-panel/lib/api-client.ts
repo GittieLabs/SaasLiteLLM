@@ -151,4 +151,24 @@ export const api = {
     const queryParams = params ? new URLSearchParams(params).toString() : '';
     return request(`/api/jobs/organizations/${organizationId}/analytics${queryParams ? `?${queryParams}` : ''}`);
   },
+
+  // Provider Credentials
+  getProviderCredentials: (organizationId: string) => request(`/api/provider-credentials/organization/${organizationId}`),
+  createProviderCredential: (data: any) => request('/api/provider-credentials/create', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }),
+  updateProviderCredential: (credentialId: string, data: any) => request(`/api/provider-credentials/${credentialId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  }),
+  deleteProviderCredential: (credentialId: string) => request(`/api/provider-credentials/${credentialId}`, {
+    method: 'DELETE',
+  }),
+  activateProviderCredential: (credentialId: string) => request(`/api/provider-credentials/${credentialId}/activate`, {
+    method: 'PUT',
+  }),
+  deactivateProviderCredential: (credentialId: string) => request(`/api/provider-credentials/${credentialId}/deactivate`, {
+    method: 'PUT',
+  }),
 };
