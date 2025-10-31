@@ -186,8 +186,9 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 
-# Internal planning documents
+# Internal planning and implementation documents
 TEAM_ITERATION_DOCS/
+Implementation/
 *SUMMARY*.md
 *PLAN*.md
 *IMPLEMENTATION*.md
