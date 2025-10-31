@@ -70,6 +70,7 @@ export default function ModelsPage() {
       setModels([]);
       setAccessGroups([]);
       setOrganizations([]);
+      setCredentials([]); // Ensure credentials is always an array
     } finally {
       setLoading(false);
     }
@@ -346,7 +347,7 @@ export default function ModelsPage() {
                           className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
                           <option value="">Use environment variables</option>
-                          {credentials
+                          {Array.isArray(credentials) && credentials
                             .filter(c => c.provider === formData.provider && c.is_active)
                             .map((cred) => (
                               <option key={cred.credential_id} value={cred.credential_name}>
@@ -355,7 +356,7 @@ export default function ModelsPage() {
                             ))}
                         </select>
                         <p className="text-xs text-muted-foreground">
-                          {credentials.filter(c => c.provider === formData.provider && c.is_active).length === 0
+                          {!Array.isArray(credentials) || credentials.filter(c => c.provider === formData.provider && c.is_active).length === 0
                             ? `No active ${formData.provider} credentials found. Add credentials in Provider Credentials page.`
                             : 'Select a credential or leave empty to use environment variables'
                           }
