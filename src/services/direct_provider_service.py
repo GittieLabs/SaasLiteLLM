@@ -15,6 +15,7 @@ import httpx
 from typing import List, Dict, Any, Optional, Tuple, AsyncIterator
 from enum import Enum
 import logging
+import uuid
 
 # Import official provider SDKs
 import openai
@@ -634,7 +635,7 @@ class DirectProviderService:
                     finish_reason = data["candidates"][0].get("finishReason", "stop").lower()
 
                 return {
-                    "id": f"gemini-{data.get('modelVersion', 'unknown')}",
+                    "id": f"gemini-{uuid.uuid4()}",
                     "model": model,
                     "choices": [
                         {
