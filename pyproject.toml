@@ -1,6 +1,6 @@
 [project]
 name = "litellm-railway-app"
-version = "1.0.0"
+version = "1.0.1"
 description = "LiteLLM proxy deployment for Railway with PostgreSQL"
 readme = "README.md"
 requires-python = ">=3.11"
