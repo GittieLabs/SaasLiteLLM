@@ -113,15 +113,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
     description: 'Claude models from Anthropic',
     models: [
       {
-        value: 'claude-opus-4-1',
-        label: 'Claude Opus 4.1',
-        description: 'Most capable Claude, 200k context, computer use',
-        contextWindow: 200000,
-        defaultInputPrice: 15.0,
-        defaultOutputPrice: 75.0,
-      },
-      {
-        value: 'claude-opus-4',
+        value: 'claude-opus-4-20250514',
         label: 'Claude Opus 4',
         description: 'Most powerful Claude model, 200k context',
         contextWindow: 200000,
@@ -129,7 +121,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 75.0,
       },
       {
-        value: 'claude-sonnet-4-5',
+        value: 'claude-sonnet-4-20250514',
         label: 'Claude Sonnet 4.5',
         description: 'Latest Sonnet, 200k context, PDF & computer use',
         contextWindow: 200000,
@@ -137,7 +129,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 15.0,
       },
       {
-        value: 'claude-sonnet-4',
+        value: 'claude-sonnet-4-20241022',
         label: 'Claude Sonnet 4',
         description: 'Balanced Claude, 200k context, 64k output',
         contextWindow: 200000,
@@ -145,15 +137,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 15.0,
       },
       {
-        value: 'claude-sonnet-3-7',
-        label: 'Claude Sonnet 3.7',
-        description: 'Previous Sonnet, 200k context, 64k output',
-        contextWindow: 200000,
-        defaultInputPrice: 3.0,
-        defaultOutputPrice: 15.0,
-      },
-      {
-        value: 'claude-haiku-4-5',
+        value: 'claude-haiku-4-20250514',
         label: 'Claude Haiku 4.5',
         description: 'Fast & capable, 200k context, computer use',
         contextWindow: 200000,
@@ -161,20 +145,20 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 5.0,
       },
       {
-        value: 'claude-haiku-3-5',
-        label: 'Claude Haiku 3.5',
+        value: 'claude-3-5-sonnet-20241022',
+        label: 'Claude 3.5 Sonnet',
+        description: 'Previous generation Sonnet, 200k context',
+        contextWindow: 200000,
+        defaultInputPrice: 3.0,
+        defaultOutputPrice: 15.0,
+      },
+      {
+        value: 'claude-3-5-haiku-20241022',
+        label: 'Claude 3.5 Haiku',
         description: 'Fast Claude, 200k context, vision',
         contextWindow: 200000,
         defaultInputPrice: 0.8,
         defaultOutputPrice: 4.0,
-      },
-      {
-        value: 'claude-haiku-3',
-        label: 'Claude Haiku 3',
-        description: 'Fastest Claude model, 200k context',
-        contextWindow: 200000,
-        defaultInputPrice: 0.25,
-        defaultOutputPrice: 1.25,
       },
     ],
   },
@@ -255,7 +239,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
     description: 'Open source models via Fireworks',
     models: [
       {
-        value: 'llama-v3p3-70b-instruct',
+        value: 'accounts/fireworks/models/llama-v3p3-70b-instruct',
         label: 'Llama 3.3 70B Instruct',
         description: 'Latest Llama 3.3, 131k context, function calling',
         contextWindow: 131072,
@@ -263,7 +247,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 0.9,
       },
       {
-        value: 'llama-v3p1-405b-instruct',
+        value: 'accounts/fireworks/models/llama-v3p1-405b-instruct',
         label: 'Llama 3.1 405B Instruct',
         description: 'Largest Llama, 131k context, function calling',
         contextWindow: 131072,
@@ -271,7 +255,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 0.9,
       },
       {
-        value: 'llama-v3p1-70b-instruct',
+        value: 'accounts/fireworks/models/llama-v3p1-70b-instruct',
         label: 'Llama 3.1 70B Instruct',
         description: 'Meta Llama 3.1, 131k context, function calling',
         contextWindow: 131072,
@@ -279,7 +263,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 0.9,
       },
       {
-        value: 'llama-v3p1-8b-instruct',
+        value: 'accounts/fireworks/models/llama-v3p1-8b-instruct',
         label: 'Llama 3.1 8B Instruct',
         description: 'Fast Llama, 131k context, function calling',
         contextWindow: 131072,
@@ -287,15 +271,15 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 0.2,
       },
       {
-        value: 'deepseek-r1',
-        label: 'DeepSeek R1',
+        value: 'accounts/fireworks/models/deepseek-v3p1',
+        label: 'DeepSeek V3.1',
         description: 'Reasoning model, 64k context',
         contextWindow: 64000,
         defaultInputPrice: 0.9,
         defaultOutputPrice: 0.9,
       },
       {
-        value: 'qwen2p5-72b-instruct',
+        value: 'accounts/fireworks/models/qwen2p5-72b-instruct',
         label: 'Qwen 2.5 72B Instruct',
         description: 'Qwen 2.5, 131k context, function calling',
         contextWindow: 131072,
@@ -303,7 +287,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 0.9,
       },
       {
-        value: 'mixtral-8x22b-instruct',
+        value: 'accounts/fireworks/models/mixtral-8x22b-instruct',
         label: 'Mixtral 8x22B Instruct',
         description: 'Large Mixtral MoE, 65k context, function calling',
         contextWindow: 65536,
@@ -311,7 +295,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 1.2,
       },
       {
-        value: 'mixtral-8x7b-instruct',
+        value: 'accounts/fireworks/models/mixtral-8x7b-instruct',
         label: 'Mixtral 8x7B Instruct',
         description: 'Efficient MoE, 32k context, function calling',
         contextWindow: 32768,
@@ -319,7 +303,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 0.5,
       },
       {
-        value: 'phi-3-vision-128k-instruct',
+        value: 'accounts/fireworks/models/phi-3-vision-128k-instruct',
         label: 'Phi-3 Vision 128k',
         description: 'Small vision model, 128k context',
         contextWindow: 128000,
@@ -327,7 +311,7 @@ export const PROVIDER_MODELS: Record<string, Provider> = {
         defaultOutputPrice: 0.2,
       },
       {
-        value: 'firellava-13b',
+        value: 'accounts/fireworks/models/firellava-13b',
         label: 'FireLLaVA 13B',
         description: 'Vision model, 4k context',
         contextWindow: 4096,
