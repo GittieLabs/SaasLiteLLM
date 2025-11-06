@@ -11,7 +11,7 @@ import httpx
 import json
 import uuid
 
-from .saas_api import LLMCallRequest, get_db
+from .saas_api import LLMCallRequest, get_db, call_litellm
 from .auth.dependencies import verify_virtual_key
 from .models.job_tracking import Job, LLMCall, JobStatus
 from .models.credits import TeamCredits
@@ -90,39 +90,6 @@ async def make_llm_call_stream(
 
     # Create streaming generator
     async def stream_llm_response():
-        litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
-
-        headers = {
-            "Authorization": f"Bearer {team_credits.virtual_key}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "model": primary_model,
-            "messages": request.messages,
-            "temperature": request.temperature,
-            "stream": True,  # Enable streaming
-            "user": job.team_id,
-        }
-
-        # Add optional parameters
-        if request.max_tokens:
-            payload["max_tokens"] = request.max_tokens
-        if request.response_format:
-            payload["response_format"] = request.response_format
-        if request.tools:
-            payload["tools"] = request.tools
-        if request.tool_choice:
-            payload["tool_choice"] = request.tool_choice
-        if request.top_p:
-            payload["top_p"] = request.top_p
-        if request.frequency_penalty:
-            payload["frequency_penalty"] = request.frequency_penalty
-        if request.presence_penalty:
-            payload["presence_penalty"] = request.presence_penalty
-        if request.stop:
-            payload["stop"] = request.stop
-
         # Track accumulated response for database storage
         accumulated_content = ""
         accumulated_tool_calls = []
@@ -133,49 +100,69 @@ async def make_llm_call_stream(
         error_message = None
 
         try:
-            async with httpx.AsyncClient() as client:
-                async with client.stream('POST', litellm_url, json=payload, headers=headers, timeout=120.0) as response:
-                    response.raise_for_status()
+            # Call provider directly via call_litellm with stream=True
+            response = await call_litellm(
+                model=primary_model,
+                messages=request.messages,
+                virtual_key=team_credits.virtual_key,
+                team_id=job.team_id,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                response_format=request.response_format,
+                tools=request.tools,
+                tool_choice=request.tool_choice,
+                top_p=request.top_p,
+                frequency_penalty=request.frequency_penalty,
+                presence_penalty=request.presence_penalty,
+                stop=request.stop,
+                stream=True,
+                db=db,
+                organization_id=team_credits.organization_id
+            )
 
-                    # Stream chunks to client
-                    async for line in response.aiter_lines():
-                        if line.startswith("data: "):
-                            chunk_data = line[6:]  # Remove "data: " prefix
+            # response is an httpx.Response object from the provider
+            async with response:
+                response.raise_for_status()
 
-                            if chunk_data == "[DONE]":
-                                yield f"data: [DONE]\n\n"
-                                break
+                # Stream chunks to client
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        chunk_data = line[6:]  # Remove "data: " prefix
 
-                            try:
-                                chunk_json = json.loads(chunk_data)
+                        if chunk_data == "[DONE]":
+                            yield f"data: [DONE]\n\n"
+                            break
 
-                                # Accumulate content
-                                if "choices" in chunk_json:
-                                    for choice in chunk_json["choices"]:
-                                        # Text content
-                                        if "delta" in choice and "content" in choice["delta"]:
-                                            accumulated_content += choice["delta"]["content"]
+                        try:
+                            chunk_json = json.loads(chunk_data)
 
-                                        # Function/tool calls
-                                        if "delta" in choice and "tool_calls" in choice["delta"]:
-                                            # Accumulate tool calls (they stream incrementally)
-                                            for tool_call_delta in choice["delta"]["tool_calls"]:
-                                                # This needs special handling to merge deltas
-                                                pass  # LiteLLM handles this
+                            # Accumulate content
+                            if "choices" in chunk_json:
+                                for choice in chunk_json["choices"]:
+                                    # Text content
+                                    if "delta" in choice and "content" in choice["delta"]:
+                                        accumulated_content += choice["delta"]["content"]
 
-                                # Extract usage if present (usually in last chunk)
-                                if "usage" in chunk_json:
-                                    accumulated_tokens = {
-                                        "prompt": chunk_json["usage"].get("prompt_tokens", 0),
-                                        "completion": chunk_json["usage"].get("completion_tokens", 0),
-                                        "total": chunk_json["usage"].get("total_tokens", 0)
-                                    }
+                                    # Function/tool calls
+                                    if "delta" in choice and "tool_calls" in choice["delta"]:
+                                        # Accumulate tool calls (they stream incrementally)
+                                        for tool_call_delta in choice["delta"]["tool_calls"]:
+                                            # This needs special handling to merge deltas
+                                            pass  # LiteLLM handles this
 
-                                # Stream to client immediately (no buffering)
-                                yield f"data: {chunk_data}\n\n"
+                            # Extract usage if present (usually in last chunk)
+                            if "usage" in chunk_json:
+                                accumulated_tokens = {
+                                    "prompt": chunk_json["usage"].get("prompt_tokens", 0),
+                                    "completion": chunk_json["usage"].get("completion_tokens", 0),
+                                    "total": chunk_json["usage"].get("total_tokens", 0)
+                                }
 
-                            except json.JSONDecodeError:
-                                continue
+                            # Stream to client immediately (no buffering)
+                            yield f"data: {chunk_data}\n\n"
+
+                        except json.JSONDecodeError:
+                            continue
 
             # After streaming completes, store in database
             end_time = datetime.utcnow()

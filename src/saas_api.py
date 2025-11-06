@@ -295,53 +295,28 @@ async def call_litellm(
                         stop=stop
                     )
             else:
-                logger.debug(f"No provider credentials found for {provider}, falling back to LiteLLM proxy")
+                logger.error(f"No provider credentials found for provider '{provider}' in organization '{organization_id}'")
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"No provider credentials configured for {provider}. Please add credentials in the admin dashboard."
+                )
 
+        except HTTPException:
+            # Re-raise HTTPException as-is
+            raise
         except Exception as e:
-            logger.warning(f"Direct provider routing failed: {str(e)}, falling back to LiteLLM proxy")
+            logger.error(f"Direct provider routing failed: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to call provider API: {str(e)}"
+            )
 
-    # Fall back to LiteLLM proxy (backward compatible)
-    litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
-
-    headers = {
-        "Authorization": f"Bearer {virtual_key}",  # Use team virtual key
-        "Content-Type": "application/json"
-    }
-
-    payload = {
-        "model": model,  # Resolved model from model group
-        "messages": messages,
-        "temperature": temperature,
-        "user": team_id,  # For LiteLLM tracking
-    }
-
-    # Add optional parameters if provided
-    if max_tokens:
-        payload["max_tokens"] = max_tokens
-    if response_format:
-        payload["response_format"] = response_format
-    if tools:
-        payload["tools"] = tools
-    if tool_choice:
-        payload["tool_choice"] = tool_choice
-    if top_p:
-        payload["top_p"] = top_p
-    if frequency_penalty:
-        payload["frequency_penalty"] = frequency_penalty
-    if presence_penalty:
-        payload["presence_penalty"] = presence_penalty
-    if stop:
-        payload["stop"] = stop
-    if stream:
-        payload["stream"] = stream
-
-    async with httpx.AsyncClient() as client:
-        if stream:
-            return await client.post(litellm_url, json=payload, headers=headers, timeout=120.0)
-        else:
-            response = await client.post(litellm_url, json=payload, headers=headers, timeout=120.0)
-            response.raise_for_status()
-            return response.json()
+    # If we reach here, it means db or organization_id was not provided
+    logger.error(f"Cannot route request: db={db is not None}, organization_id={organization_id}")
+    raise HTTPException(
+        status_code=500,
+        detail="Provider routing requires organization context. This is likely a configuration error."
+    )
 
 
 def calculate_complete_costs(
@@ -710,45 +685,13 @@ async def make_llm_call_stream(
         job.model_groups_used.append(request.model)
         db.commit()
 
-    # Capture virtual_key and team_id before generator to avoid DetachedInstanceError
+    # Capture values before generator to avoid DetachedInstanceError
     virtual_key_value = getattr(team_credits, 'virtual_key', None)
     team_id_value = job.team_id
+    organization_id_value = team_credits.organization_id
 
     # Create streaming generator
     async def stream_llm_response():
-        litellm_url = f"{settings.litellm_proxy_url}/chat/completions"
-
-        headers = {
-            "Authorization": f"Bearer {virtual_key_value}",
-            "Content-Type": "application/json"
-        }
-
-        payload = {
-            "model": primary_model,
-            "messages": request.messages,
-            "temperature": request.temperature,
-            "stream": True,  # Enable streaming
-            "user": team_id_value,
-        }
-
-        # Add optional parameters
-        if request.max_tokens:
-            payload["max_tokens"] = request.max_tokens
-        if request.response_format:
-            payload["response_format"] = request.response_format
-        if request.tools:
-            payload["tools"] = request.tools
-        if request.tool_choice:
-            payload["tool_choice"] = request.tool_choice
-        if request.top_p:
-            payload["top_p"] = request.top_p
-        if request.frequency_penalty:
-            payload["frequency_penalty"] = request.frequency_penalty
-        if request.presence_penalty:
-            payload["presence_penalty"] = request.presence_penalty
-        if request.stop:
-            payload["stop"] = request.stop
-
         # Track accumulated response for database storage
         accumulated_content = ""
         accumulated_tokens = {"prompt": 0, "completion": 0, "total": 0}
@@ -756,43 +699,63 @@ async def make_llm_call_stream(
         start_time = datetime.utcnow()
 
         try:
-            async with httpx.AsyncClient() as client:
-                async with client.stream('POST', litellm_url, json=payload, headers=headers, timeout=120.0) as response:
-                    response.raise_for_status()
+            # Call provider directly via call_litellm with stream=True
+            response = await call_litellm(
+                model=primary_model,
+                messages=request.messages,
+                virtual_key=virtual_key_value,
+                team_id=team_id_value,
+                temperature=request.temperature,
+                max_tokens=request.max_tokens,
+                response_format=request.response_format,
+                tools=request.tools,
+                tool_choice=request.tool_choice,
+                top_p=request.top_p,
+                frequency_penalty=request.frequency_penalty,
+                presence_penalty=request.presence_penalty,
+                stop=request.stop,
+                stream=True,
+                db=db,
+                organization_id=organization_id_value
+            )
 
-                    # Stream chunks to client
-                    async for line in response.aiter_lines():
-                        if line.startswith("data: "):
-                            chunk_data = line[6:]  # Remove "data: " prefix
+            # response is an httpx.Response object from the provider
+            async with response:
+                response.raise_for_status()
 
-                            if chunk_data == "[DONE]":
-                                yield f"data: [DONE]\n\n"
-                                break
+                # Stream chunks to client
+                async for line in response.aiter_lines():
+                    if line.startswith("data: "):
+                        chunk_data = line[6:]  # Remove "data: " prefix
 
-                            try:
-                                import json
-                                chunk_json = json.loads(chunk_data)
+                        if chunk_data == "[DONE]":
+                            yield f"data: [DONE]\n\n"
+                            break
 
-                                # Accumulate content
-                                if "choices" in chunk_json:
-                                    for choice in chunk_json["choices"]:
-                                        # Text content
-                                        if "delta" in choice and "content" in choice["delta"]:
-                                            accumulated_content += choice["delta"]["content"]
+                        try:
+                            import json
+                            chunk_json = json.loads(chunk_data)
 
-                                # Extract usage if present (usually in last chunk)
-                                if "usage" in chunk_json:
-                                    accumulated_tokens = {
-                                        "prompt": chunk_json["usage"].get("prompt_tokens", 0),
-                                        "completion": chunk_json["usage"].get("completion_tokens", 0),
-                                        "total": chunk_json["usage"].get("total_tokens", 0)
-                                    }
+                            # Accumulate content
+                            if "choices" in chunk_json:
+                                for choice in chunk_json["choices"]:
+                                    # Text content
+                                    if "delta" in choice and "content" in choice["delta"]:
+                                        accumulated_content += choice["delta"]["content"]
 
-                                # Stream to client immediately (no buffering)
-                                yield f"data: {chunk_data}\n\n"
+                            # Extract usage if present (usually in last chunk)
+                            if "usage" in chunk_json:
+                                accumulated_tokens = {
+                                    "prompt": chunk_json["usage"].get("prompt_tokens", 0),
+                                    "completion": chunk_json["usage"].get("completion_tokens", 0),
+                                    "total": chunk_json["usage"].get("total_tokens", 0)
+                                }
 
-                            except json.JSONDecodeError:
-                                continue
+                            # Stream to client immediately (no buffering)
+                            yield f"data: {chunk_data}\n\n"
+
+                        except json.JSONDecodeError:
+                            continue
 
             # After streaming completes, store in database
             end_time = datetime.utcnow()
