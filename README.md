@@ -4,20 +4,21 @@
 [![GitHub release](https://img.shields.io/github/v/release/GittieLabs/SaasLiteLLM)](https://github.com/GittieLabs/SaasLiteLLM/releases)
 [![Documentation](https://img.shields.io/badge/docs-github%20pages-blue)](https://gittielabs.github.io/SaasLiteLLM/)
 
-A production-ready multi-tenant SaaS wrapper for [LiteLLM](https://github.com/BerriAI/litellm) with **job-based cost tracking**. Build your LLM-powered SaaS without exposing infrastructure complexity to your customers.
+Multi-tenant LLM gateway with job-based cost tracking, credit management, and a purpose-built pricing engine. Originally built on LiteLLM; now fully independent.
 
-> **Built on [LiteLLM](https://github.com/BerriAI/litellm)** - The unified interface to 100+ LLM providers (OpenAI, Anthropic, Azure, Google, AWS, and more).
+A production-ready multi-tenant LLM gateway with **job-based cost tracking**, credit management, and a purpose-built pricing engine. Build your LLM-powered SaaS without exposing infrastructure complexity to your customers.
 
+> **Independent of LiteLLM as of v1.0.** This project began as a wrapper around [LiteLLM](https://github.com/BerriAI/litellm). The proxy dependency and pricing layer have since been replaced with a purpose-built implementation — LiteLLM is no longer required or used.
 ## Key Features
 
 ### 🎯 SaaS-Ready Architecture
 - **Job-Based Tracking** - Group multiple LLM calls into business operations
-- **Hidden Complexity** - Teams never see models, pricing, or LiteLLM
+- **Hidden Complexity** - Teams never see models, providers, or raw pricing
 - **Cost Aggregation** - Track true costs per job, not per API call
 - **Usage Analytics** - Detailed insights per team and job type
 
 ### 💰 Business Features
-- **Cost Transparency** - See actual LiteLLM costs vs. customer pricing
+- **Cost Transparency** - See actual provider costs vs. customer pricing
 - **Flexible Pricing** - Flat rate, tiered, or markup-based pricing
 - **Budget Controls** - Per-team limits and alerts
 - **Profit Tracking** - Calculate margins per job/team
@@ -53,13 +54,7 @@ A production-ready multi-tenant SaaS wrapper for [LiteLLM](https://github.com/Be
    nano .env
    ```
 
-4. **Start the LiteLLM server:**
-   ```bash
-   source .venv/bin/activate
-   python scripts/start_local.py
-   ```
-
-5. **Setup teams (after server is running):**
+4. **Setup teams (after server is running):**
    ```bash
    python scripts/setup_teams.py
    ```
@@ -78,12 +73,6 @@ For job-based cost tracking:
 # 3. Activate environment
 source .venv/bin/activate
 
-# 4. Start LiteLLM backend (Terminal 1)
-python scripts/start_local.py
-
-# 5. Start SaaS API wrapper (Terminal 2)
-python scripts/start_saas_api.py
-```
 
 **Services:**
 - **SaaS API**: http://localhost:8003 (expose this to your teams)
@@ -137,7 +126,6 @@ docker compose down -v
 - **SaaS API**: http://localhost:8003 (for your teams)
 - **SaaS API Docs**: http://localhost:8003/docs
 - **Admin Panel**: http://localhost:3000 (admin dashboard)
-- **pgAdmin**: http://localhost:5050 (admin@litellm.local/admin)
 
 ## Job-Based API Usage (SaaS Pattern)
 
@@ -261,9 +249,6 @@ docker compose ps postgres
 
 # Check database logs
 docker compose logs postgres
-
-# Test connection manually
-docker exec -it litellm-postgres psql -U litellm_user -d litellm
 ```
 
 ### Reset Everything
@@ -331,16 +316,15 @@ docker compose down -v
 ```
 SaasLiteLLM/
 ├── src/
-│   ├── main.py                    # LiteLLM proxy entry point
+│   ├── main.py                    # main entry
 │   ├── saas_api.py                # SaaS wrapper API (job tracking)
 │   ├── config/
 │   │   ├── settings.py            # Environment configuration
-│   │   └── litellm_config.yaml    # Models, Redis, rate limits
 │   └── models/
 │       ├── database.py            # Database utilities
 │       └── job_tracking.py        # Job schema (jobs, llm_calls, etc.)
 ├── scripts/
-│   ├── start_local.py             # Start LiteLLM backend
+│   ├── start_local.py             # Start backend
 │   ├── start_saas_api.py          # Start SaaS API wrapper
 │   ├── init_job_tracking_db.py    # Initialize job tables
 │   └── docker_setup.sh            # Start Postgres + Redis
@@ -364,10 +348,9 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-This project is built on [LiteLLM](https://github.com/BerriAI/litellm), an amazing open-source project that provides a unified interface to 100+ LLM providers. Special thanks to the LiteLLM team for their excellent work.
+This project began as a wrapper around [LiteLLM](https://github.com/BerriAI/litellm), whose unified provider interface made the first version possible. The proxy dependency has since been replaced with a purpose-built implementation, but the original design owes a great deal to their work.
 
 ## Support
 
 - **Documentation**: [https://gittielabs.github.io/SaasLiteLLM/](https://gittielabs.github.io/SaasLiteLLM/)
 - **Issues**: [GitHub Issues](https://github.com/GittieLabs/SaasLiteLLM/issues)
-- **LiteLLM Docs**: [https://docs.litellm.ai/](https://docs.litellm.ai/)
